@@ -26,7 +26,7 @@ Unofficial Flutter client for the `forgotten-app` backend, focused on local-firs
 
 ## Running (flavors)
 From `forgotten_client/`:
-- Copy env template: `cp .env.dev.example .env.dev` (and stage/prod as needed).
+- Copy env template: `cp .env.dev.example .env.dev` (and stage/prod as needed). These `.env.*` files are JSON maps for `--dart-define-from-file`.
 - Dev: `flutter run --flavor dev --dart-define-from-file=.env.dev`
 - Stage: `flutter run --flavor stage --dart-define-from-file=.env.stage`
 - Prod: `flutter run --flavor prod --dart-define-from-file=.env.prod`

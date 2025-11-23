@@ -16,8 +16,8 @@
 - dart-defines (per flavor): `API_BASE_URL`, `OPENAI_MODE`, `FEATURE_FLAGS_JSON`, `SENTRY_DSN` (optional), `APP_LOG_LEVEL`.
 - Use `.env.<flavor>` for local development; load via build scripts into dart-defines.
 - Build/run examples:
-  - `flutter run --flavor dev --dart-define-from-file=.env.dev`
-  - `flutter build macos --flavor stage --dart-define-from-file=.env.stage`
+  - `flutter run --flavor dev --dart-define-from-file=.env.dev` (JSON map file)
+  - `flutter build macos --flavor stage --dart-define-from-file=.env.stage` (JSON map file)
 
 ## Package layout (suggested)
 - `lib/`
