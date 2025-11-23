@@ -1,0 +1,12 @@
+generatorName: dart-dio
+inputSpec: forgotten-app.yaml
+outputDir: lib/api/generated
+additionalProperties:
+  pubName: forgotten_client_api
+  pubDescription: API client for forgotten-app backend (generated).
+  pubVersion: 0.0.1
+  nullSafeRequired: true
+  dateLibrary: core
+  useEnumExtension: true
+  hideGenerationTimestamp: true
+  serializationLibrary: json_serializable
