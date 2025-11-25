@@ -31,8 +31,18 @@ From `forgotten_client/`:
 - Stage: `flutter run --flavor stage --dart-define-from-file=.env.stage`
 - Prod: `flutter run --flavor prod --dart-define-from-file=.env.prod`
 
+### Make targets (from repo root)
+- `make help` — list targets.
+- `make format` — `flutter format lib test`.
+- `make analyze` — `flutter analyze`.
+- `make test` — `flutter test`.
+- `make check` — format + analyze + test.
+- `make run FLAVOR=dev` — run with `.env.dev` (override `ENV_FILE` as needed).
+- `make run-desktop DEVICE=macos ENV_FILE=.env.dev` — desktop run without flavor flag (useful until macOS/Windows/Linux schemes are flavored).
+- `make gen-api` — regenerate OpenAPI client (spec must exist at `openapi/forgotten-app.yaml`).
+
 ## OpenAPI client
-- Place the backend spec at `forgotten_client/openapi/forgotten-app.yaml`.
+- Place the backend spec at `forgotten_client/openapi/forgotten-app.json` (config points there).
 - Regenerate client: `./tool/generate_api.sh` (requires `openapi-generator-cli` on PATH). Generated code lands in `lib/api/generated/`.
 
 ## Next up
