@@ -17,11 +17,12 @@ class _FakePathProvider extends PathProviderPlatform {
 }
 
 class _FakeToolRunner extends ToolRunner {
-  _FakeToolRunner({this.streamLines = const []});
+  _FakeToolRunner({this.streamLines = const [], this.exitCode = 0});
 
   final List<String> streamLines;
   final List<List<String>> runStreamArgs = [];
   final List<String> runArgsExecutables = [];
+  final int exitCode;
 
   @override
   Future<ProcessResult> run(String executable, List<String> args, {String? workingDirectory}) async {
@@ -38,6 +39,9 @@ class _FakeToolRunner extends ToolRunner {
     }
     for (final line in streamLines) {
       yield line;
+    }
+    if (exitCode != 0) {
+      throw ProcessException(executable, args, 'Exit code $exitCode', exitCode);
     }
   }
 }
@@ -82,5 +86,15 @@ void main() {
     expect(toolRunner.runStreamArgs, isNotEmpty);
     expect(logs, containsAll(['line1', 'line2']));
     expect(file.existsSync(), isTrue);
+  });
+
+  test('prepareIngestFromUrl surfaces process failures', () async {
+    final toolRunner = _FakeToolRunner(streamLines: ['err'], exitCode: 1);
+    final service = MediaService(toolRunner: toolRunner);
+
+    expect(
+      () => service.prepareIngestFromUrl('https://example.com/bad'),
+      throwsA(isA<ProcessException>()),
+    );
   });
 }

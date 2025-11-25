@@ -36,8 +36,9 @@ class ToolRunner {
 
     yield* outputStream;
 
-    if (exitCode != 0) {
-      throw ProcessException(executable, args, 'Exit code \$exitCode', exitCode);
+    final code = await process.exitCode;
+    if (code != 0) {
+      throw ProcessException(executable, args, 'Exit code $code', code);
     }
   }
 
