@@ -91,7 +91,20 @@
 2) Local ingest + normalize + render on desktop; push metadata to backend.
 3) Transcript + highlight (cloud via OpenAI); wiring to clip creation locally.
 4) Optional local transcript/highlights; settings panel for OpenAI key and binary paths.
-5) Publishing flow (backend or client-side); packaging and release builds for desktop.
+5) Publishing flow (backend-owned; client triggers/polls and uploads assets if required); packaging and release builds for desktop.
+
+## Near-term desktop epics (pipeline-first)
+- Auth + config bootstrap: generate client from OpenAPI (once published), login/refresh wiring, fetch feature flags/config.
+- Ingest + workspace: YouTube URL or file import, workspace layout (/ingest,/normalize,/render,/logs), hashing/validation.
+- Tooling & settings: detect `ffmpeg`/`yt-dlp`, settings UI for binary paths and OpenAI key (if direct calls allowed).
+- Normalize & render: ffmpeg pipeline to 9:16 target, bitrate clamp, clip slicing, process log streaming, cancel/retry.
+- Transcripts/subtitles: local-first `whisper.cpp` for transcripts (with cloud/OpenAI fallback if disabled/failing); burn-in subtitles during render.
+- Sync/offline: push video/clip metadata, captions, statuses; offline cache (Hive/SQLite) and reconciliation on reconnect.
+- UI shells: auth → dashboard → job detail with stage progress → settings/logs.
+
+## OpenAPI TODO
+- Publish and commit the FastAPI OpenAPI spec.
+- Include publish endpoints, status enums, config/feature flags endpoint, and asset upload/signed-URL contract.
 
 ## Immediate next steps
 - Create architecture doc outlining platform targets, local tool distribution strategy, app data/workspace layout, and sync model.

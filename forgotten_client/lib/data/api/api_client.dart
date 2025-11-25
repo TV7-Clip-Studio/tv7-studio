@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../config/app_config.dart';
 import '../auth/token_store.dart';
@@ -13,7 +14,15 @@ class ApiClient {
             connectTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 30),
           ),
-        )..interceptors.add(_AuthInterceptor(tokenStore: tokenStore));
+        )
+          ..interceptors.add(_AuthInterceptor(tokenStore: tokenStore))
+          ..interceptors.add(
+            LogInterceptor(
+              requestBody: true,
+              responseBody: true,
+              logPrint: (msg) => debugPrint('[api] $msg'),
+            ),
+          );
 
   final AppConfig config;
   final TokenStore tokenStore;

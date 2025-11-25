@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${SCRIPT_DIR}/.."
 OPENAPI_DIR="${REPO_ROOT}/openapi"
-SPEC="${OPENAPI_DIR}/forgotten-app.yaml"
+SPEC="${OPENAPI_DIR}/forgotten-app.json"
 CONFIG="${OPENAPI_DIR}/config.yaml"
 OUTPUT_DIR="${REPO_ROOT}/lib/api/generated"
 
@@ -16,7 +16,7 @@ fi
 
 mkdir -p "${OUTPUT_DIR}"
 
-openapi-generator-cli generate \
+openapi-generator generate \
   -g dart-dio \
   -i "${SPEC}" \
   -o "${OUTPUT_DIR}" \

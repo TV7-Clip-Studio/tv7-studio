@@ -1,5 +1,5 @@
 generatorName: dart-dio
-inputSpec: forgotten-app.yaml
+inputSpec: forgotten-app.json
 outputDir: lib/api/generated
 additionalProperties:
   pubName: forgotten_client_api

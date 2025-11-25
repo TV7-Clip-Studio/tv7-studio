@@ -42,7 +42,7 @@
 - UI: `go_router` or `beamer` for navigation; `hooks_riverpod` optional for ergonomics.
 
 ## OpenAPI client integration
-- Store spec under `openapi/forgotten-app.yaml`.
+- Store spec under `openapi/forgotten-app.json` (config points to this file).
 - Generator config `openapi/config.yaml` (pinned options).
 - Generated client lives in `lib/api/generated/`; add thin wrapper in `lib/data/api_client.dart`.
 - Provide script `tool/generate_api.sh` to fetch spec and regenerate client; commit generated code.

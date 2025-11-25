@@ -31,15 +31,21 @@
 - Distribution per OS:
   - macOS: bundle binaries in app resources when licensing allows; otherwise prompt install (brew) or user-provided path.
   - Windows: ship bundled binaries; allow custom paths.
-  - Linux: prefer bundled AppImage/embedded; fallback to system packages; allow custom paths.
-  - iOS/Android: no external binaries; rely on native-compiled libs or defer heavy pipeline to desktop until mobile path is ready.
+- Linux: prefer bundled AppImage/embedded; fallback to system packages; allow custom paths.
+- iOS/Android: no external binaries; rely on native-compiled libs or defer heavy pipeline to desktop until mobile path is ready.
 - Validation: check versions/paths at startup and in settings; surface missing deps with guided install.
+
+## Local models menu (recommendations)
+- Transcripts: `whisper.cpp` GGUF (tiny/base/small/medium/large). Default to base for speed/quality balance; allow user to pick larger if hardware permits (Metal on Apple Silicon). Cloud/OpenAI acts as a fallback when local is disabled or fails.
+- Highlights/LLM (optional): llama.cpp-compatible GGUF (e.g., LLaMA 3.2/3.1 8B, Mistral 7B, Phi-3 mini). Ship no model by default; prompt download on enable. Prefer q4/q5 quant. Use Metal/Vulkan if available.
+- Mobile: default to cloud path; gate local models behind an explicit toggle with hardware check and thermal/battery warnings.
+- Fallback policy: try local if enabled + model present + hardware passes check; on failure (missing model/OOM/error), fall back to cloud and surface a toast/log entry.
 
 ## Media pipeline (local)
 - Workspace: app data dir with subdirs: `/ingest`, `/normalize`, `/render`, `/logs`, `/cache`. Clean per-job on completion; rotate logs.
 - Ingest: YouTube via `yt-dlp` or local file import; validate size/format; compute hashes and basic metadata (duration, dimensions).
 - Normalize: ffmpeg scale to 9:16 target height, clamp bitrate/codec, write to `/normalize`.
-- Transcript: optional `whisper.cpp` (local) or backend/OpenAI; store transcript alongside media.
+- Transcript: default local `whisper.cpp` (GGUF) with cloud/OpenAI fallback when disabled or failing; store transcript alongside media.
 - Highlights: default cloud (backend/OpenAI); optional local small model if available.
 - Render: ffmpeg slice/reframe clips; optional burn-in subtitles; output to `/render`.
 - Progress: stream process logs; track stages for UI; support cancel/retry.
@@ -62,6 +68,9 @@
 - Desktop: dmg (macOS), msix (Windows), AppImage (Linux). Start unsigned for internal tests; add signing/notarization later.
 - Mobile: TestFlight/Play Internal; consider deferring on-device rendering if perf/storage is insufficient initially.
 - CI: `flutter format`/`analyze`/`test`; desktop build checks; openapi generation lint; pinned toolchain versions.
+
+## Publishing (cloud-owned)
+- See `docs/publishing_contract.md` for roles. Backend holds platform tokens and runs publish jobs; client triggers/polls and uploads assets if required. Clips without an `asset_url` remain `ready_local_only` (non-publishable).
 
 ## Immediate implementation steps
 - Bootstrap Flutter project `forgotten_client` with flavors and env wiring.

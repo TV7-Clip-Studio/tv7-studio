@@ -4,7 +4,7 @@ import 'package:forgotten_client/app.dart';
 import 'package:forgotten_client/config/app_config.dart';
 
 void main() {
-  testWidgets('shows config preview values', (tester) async {
+  testWidgets('renders login shell by default', (tester) async {
     const defaults = AppConfigDefaults(
       flavor: 'test',
       apiBaseUrl: 'https://api.test.local',
@@ -16,9 +16,8 @@ void main() {
     final config = AppConfig.fromEnvironment(defaults: defaults);
     await tester.pumpWidget(App(config: config));
 
-    expect(find.textContaining('Bootstrap shell'), findsOneWidget);
-    expect(find.text('API base URL'), findsOneWidget);
-    expect(find.text('OpenAI mode'), findsOneWidget);
-    expect(find.textContaining('api.test.local'), findsOneWidget);
+    expect(find.textContaining('Sign in'), findsAtLeastNWidgets(1));
+    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
   });
 }
