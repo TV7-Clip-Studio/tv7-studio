@@ -1,7 +1,6 @@
 import 'package:test/test.dart';
 import 'package:forgotten_client_api/forgotten_client_api.dart';
 
-
 /// tests for UploadsApi
 void main() {
   final instance = ForgottenClientApi().getUploadsApi();
@@ -15,6 +14,5 @@ void main() {
     test('test uploadAssetApiV1UploadsAssetsPost', () async {
       // TODO
     });
-
   });
 }

@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 
 class FilePickerArea extends StatelessWidget {
   const FilePickerArea({
-    super.key,
     required this.onFileSelected,
+    super.key,
     this.enabled = true,
   });
 
@@ -12,10 +12,7 @@ class FilePickerArea extends StatelessWidget {
   final bool enabled;
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.video,
-      allowMultiple: false,
-    );
+    final result = await FilePicker.platform.pickFiles(type: FileType.video);
 
     if (result != null && result.files.single.path != null) {
       onFileSelected(result.files.single.path!);
@@ -41,7 +38,9 @@ class FilePickerArea extends StatelessWidget {
             decoration: BoxDecoration(
               border: Border.all(color: Theme.of(context).dividerColor),
               borderRadius: BorderRadius.circular(8),
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              color: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

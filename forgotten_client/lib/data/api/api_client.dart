@@ -1,28 +1,27 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../config/app_config.dart';
-import '../auth/token_store.dart';
+import 'package:forgotten_client/config/app_config.dart';
+import 'package:forgotten_client/data/auth/token_store.dart';
 
 class ApiClient {
-  ApiClient({
-    required this.config,
-    required this.tokenStore,
-  }) : dio = Dio(
-          BaseOptions(
-            baseUrl: config.apiBaseUrl.toString(),
-            connectTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 30),
-          ),
-        )
-          ..interceptors.add(_AuthInterceptor(tokenStore: tokenStore))
-          ..interceptors.add(
-            LogInterceptor(
-              requestBody: true,
-              responseBody: true,
-              logPrint: (msg) => debugPrint('[api] $msg'),
-            ),
-          );
+  ApiClient({required this.config, required this.tokenStore})
+    : dio =
+          Dio(
+              BaseOptions(
+                baseUrl: config.apiBaseUrl.toString(),
+                connectTimeout: const Duration(seconds: 10),
+                receiveTimeout: const Duration(seconds: 30),
+              ),
+            )
+            ..interceptors.add(_AuthInterceptor(tokenStore: tokenStore))
+            ..interceptors.add(
+              LogInterceptor(
+                requestBody: true,
+                responseBody: true,
+                logPrint: (msg) => debugPrint('[api] $msg'),
+              ),
+            );
 
   final AppConfig config;
   final TokenStore tokenStore;
@@ -39,7 +38,10 @@ class _AuthInterceptor extends Interceptor {
   final TokenStore tokenStore;
 
   @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+  Future<void> onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) async {
     final tokens = await tokenStore.read();
     if (tokens != null && tokens.accessToken.isNotEmpty) {
       options.headers.putIfAbsent(
@@ -51,10 +53,13 @@ class _AuthInterceptor extends Interceptor {
   }
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) async {
+  Future<void> onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
     final status = err.response?.statusCode;
     if (status == 401) {
-      // TODO: hook token refresh with AuthRepository once available.
+      // TODO(tv7): hook token refresh with AuthRepository once available.
     }
     super.onError(err, handler);
   }

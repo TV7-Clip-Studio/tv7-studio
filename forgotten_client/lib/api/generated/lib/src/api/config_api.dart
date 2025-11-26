@@ -12,7 +12,6 @@ import 'package:dio/dio.dart';
 import 'package:forgotten_client_api/src/model/config_read.dart';
 
 class ConfigApi {
-
   final Dio _dio;
 
   const ConfigApi(this._dio);
@@ -30,7 +29,7 @@ class ConfigApi {
   ///
   /// Returns a [Future] containing a [Response] with a [ConfigRead] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<ConfigRead>> getConfigApiV1ConfigGet({ 
+  Future<Response<ConfigRead>> getConfigApiV1ConfigGet({
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
     Map<String, dynamic>? extra,
@@ -41,16 +40,10 @@ class ConfigApi {
     final _path = r'/api/v1/config';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
+      headers: <String, dynamic>{...?headers},
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {
-            'type': 'http',
-            'scheme': 'bearer',
-            'name': 'HTTPBearer',
-          },
+          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
         ],
         ...?extra,
       },
@@ -68,9 +61,14 @@ class ConfigApi {
     ConfigRead? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<ConfigRead, ConfigRead>(rawData, 'ConfigRead', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<ConfigRead, ConfigRead>(
+              rawData,
+              'ConfigRead',
+              growable: true,
+            );
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -92,5 +90,4 @@ _responseData = rawData == null ? null : deserialize<ConfigRead, ConfigRead>(raw
       extra: _response.extra,
     );
   }
-
 }

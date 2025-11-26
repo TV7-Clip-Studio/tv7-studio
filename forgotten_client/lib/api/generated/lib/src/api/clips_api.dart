@@ -14,17 +14,16 @@ import 'package:forgotten_client_api/src/model/clip_update_request.dart';
 import 'package:forgotten_client_api/src/model/http_validation_error.dart';
 
 class ClipsApi {
-
   final Dio _dio;
 
   const ClipsApi(this._dio);
 
   /// Update Clip
-  /// 
+  ///
   ///
   /// Parameters:
-  /// * [clipId] 
-  /// * [clipUpdateRequest] 
+  /// * [clipId]
+  /// * [clipUpdateRequest]
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
   /// * [headers] - Can be used to add additional headers to the request
   /// * [extras] - Can be used to add flags to the request
@@ -34,7 +33,7 @@ class ClipsApi {
   ///
   /// Returns a [Future] containing a [Response] with a [ClipRead] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<ClipRead>> updateClipApiV1ClipsClipIdPatch({ 
+  Future<Response<ClipRead>> updateClipApiV1ClipsClipIdPatch({
     required int clipId,
     required ClipUpdateRequest clipUpdateRequest,
     CancelToken? cancelToken,
@@ -44,19 +43,18 @@ class ClipsApi {
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async {
-    final _path = r'/api/v1/clips/{clip_id}'.replaceAll('{' r'clip_id' '}', clipId.toString());
+    final _path = r'/api/v1/clips/{clip_id}'.replaceAll(
+      '{'
+      r'clip_id'
+      '}',
+      clipId.toString(),
+    );
     final _options = Options(
       method: r'PATCH',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
+      headers: <String, dynamic>{...?headers},
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {
-            'type': 'http',
-            'scheme': 'bearer',
-            'name': 'HTTPBearer',
-          },
+          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
         ],
         ...?extra,
       },
@@ -67,13 +65,10 @@ class ClipsApi {
     dynamic _bodyData;
 
     try {
-_bodyData=jsonEncode(clipUpdateRequest);
-    } catch(error, stackTrace) {
+      _bodyData = jsonEncode(clipUpdateRequest);
+    } catch (error, stackTrace) {
       throw DioException(
-         requestOptions: _options.compose(
-          _dio.options,
-          _path,
-        ),
+        requestOptions: _options.compose(_dio.options, _path),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -92,9 +87,14 @@ _bodyData=jsonEncode(clipUpdateRequest);
     ClipRead? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<ClipRead, ClipRead>(rawData, 'ClipRead', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<ClipRead, ClipRead>(
+              rawData,
+              'ClipRead',
+              growable: true,
+            );
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -116,5 +116,4 @@ _responseData = rawData == null ? null : deserialize<ClipRead, ClipRead>(rawData
       extra: _response.extra,
     );
   }
-
 }

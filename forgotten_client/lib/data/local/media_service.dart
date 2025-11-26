@@ -1,7 +1,11 @@
+// ignore_for_file: avoid_slow_async_io
+
+import 'dart:convert';
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+
+import 'package:forgotten_client/data/local/tool_runner.dart';
 import 'package:path/path.dart' as p;
-import 'tool_runner.dart';
+import 'package:path_provider/path_provider.dart';
 
 class MediaService {
   MediaService({required this.toolRunner});
@@ -17,24 +21,70 @@ class MediaService {
     return workspace;
   }
 
-  Future<File> prepareIngestFromUrl(String url, {void Function(String)? onLog}) async {
+  Future<File> prepareIngestFromUrl(
+    String url, {
+    void Function(String)? onLog,
+  }) async {
     final workspace = await _workspace;
-    // Simple naming strategy for now, ideally we'd get the title first
-    final filename = 'download_${DateTime.now().millisecondsSinceEpoch}.mp4';
+    // Use base name without extension, let yt-dlp add the correct one
+    final filename = 'download_${DateTime.now().millisecondsSinceEpoch}';
     final outputPath = p.join(workspace.path, filename);
 
-    onLog?.call('Starting download to $outputPath...');
+    onLog?.call('Starting download...');
 
-    final stream = toolRunner.runStream(
-      'yt-dlp',
-      ['-o', outputPath, url],
-    );
+    final stream = toolRunner.runStream('yt-dlp', [
+      '-f',
+      'bestvideo[height<=720]+bestaudio/best[height<=720]',
+      '-o',
+      outputPath,
+      url,
+    ]);
 
     await for (final line in stream) {
       onLog?.call(line);
     }
 
-    return File(outputPath);
+    // Find the actual file created (yt-dlp adds extension)
+    File? actualFile;
+    try {
+      final files = workspace.listSync();
+      // Find file that starts with our base name and is a video
+      actualFile = files.whereType<File>().firstWhere(
+        (f) =>
+            p.basename(f.path).startsWith(filename) &&
+            !f.path.endsWith('.part') &&
+            !f.path.endsWith('.ytdl'),
+        orElse: () => File(outputPath), // Fallback
+      );
+    } catch (e) {
+      onLog?.call('Error finding downloaded file: $e');
+      actualFile = File(outputPath);
+    }
+
+    // Save metadata using the ACTUAL filename
+    onLog?.call('Fetching metadata...');
+    try {
+      final meta = await toolRunner.getYouTubeMetadata(url);
+      final metaFile = File('${actualFile.path}.meta.json');
+      await metaFile.writeAsString(jsonEncode(meta));
+      onLog?.call('Metadata saved to ${metaFile.path}');
+    } catch (e) {
+      onLog?.call('Failed to save metadata: $e');
+    }
+
+    onLog?.call('Downloading transcript...');
+    // Transcript should use the base name so it matches the expected pattern.
+    // Repo expects: videoPath (minus extension) + .en.vtt
+    // If video is foo.webm, repo looks for foo.en.vtt
+    // So we download to outputPath (which is 'foo')
+    try {
+      await toolRunner.downloadTranscript(url, outputPath, 'en');
+      onLog?.call('Transcript downloaded.');
+    } catch (e) {
+      onLog?.call('Transcript download failed: $e');
+    }
+
+    return actualFile;
   }
 
   Future<File> prepareIngestFromFile(String sourcePath) async {

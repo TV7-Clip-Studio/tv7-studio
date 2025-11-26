@@ -1,7 +1,6 @@
 import 'package:test/test.dart';
 import 'package:forgotten_client_api/forgotten_client_api.dart';
 
-
 /// tests for AdminApi
 void main() {
   final instance = ForgottenClientApi().getAdminApi();
@@ -52,9 +51,12 @@ void main() {
     // Request More Highlights
     //
     //Future<Object> requestMoreHighlightsAdminVideosVideoIdMoreHighlightsPost(int videoId) async
-    test('test requestMoreHighlightsAdminVideosVideoIdMoreHighlightsPost', () async {
-      // TODO
-    });
+    test(
+      'test requestMoreHighlightsAdminVideosVideoIdMoreHighlightsPost',
+      () async {
+        // TODO
+      },
+    );
 
     // Toggle User Status
     //
@@ -118,6 +120,5 @@ void main() {
     test('test youtubeDisconnectAdminYoutubeDisconnectPost', () async {
       // TODO
     });
-
   });
 }

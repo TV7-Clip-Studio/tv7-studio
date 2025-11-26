@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 
-import 'app.dart';
-import 'config/app_config.dart';
+import 'package:forgotten_client/app.dart';
+import 'package:forgotten_client/config/app_config.dart';
 
 Future<void> bootstrap(AppConfig config) async {
   WidgetsFlutterBinding.ensureInitialized();

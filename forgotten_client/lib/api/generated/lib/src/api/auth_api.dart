@@ -15,16 +15,15 @@ import 'package:forgotten_client_api/src/model/token.dart';
 import 'package:forgotten_client_api/src/model/token_refresh_request.dart';
 
 class AuthApi {
-
   final Dio _dio;
 
   const AuthApi(this._dio);
 
   /// Login
-  /// 
+  ///
   ///
   /// Parameters:
-  /// * [loginRequest] 
+  /// * [loginRequest]
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
   /// * [headers] - Can be used to add additional headers to the request
   /// * [extras] - Can be used to add flags to the request
@@ -34,7 +33,7 @@ class AuthApi {
   ///
   /// Returns a [Future] containing a [Response] with a [Token] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<Token>> loginApiV1AuthLoginPost({ 
+  Future<Response<Token>> loginApiV1AuthLoginPost({
     required LoginRequest loginRequest,
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
@@ -46,13 +45,8 @@ class AuthApi {
     final _path = r'/api/v1/auth/login';
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
-      extra: <String, dynamic>{
-        'secure': <Map<String, String>>[],
-        ...?extra,
-      },
+      headers: <String, dynamic>{...?headers},
+      extra: <String, dynamic>{'secure': <Map<String, String>>[], ...?extra},
       contentType: 'application/json',
       validateStatus: validateStatus,
     );
@@ -60,13 +54,10 @@ class AuthApi {
     dynamic _bodyData;
 
     try {
-_bodyData=jsonEncode(loginRequest);
-    } catch(error, stackTrace) {
+      _bodyData = jsonEncode(loginRequest);
+    } catch (error, stackTrace) {
       throw DioException(
-         requestOptions: _options.compose(
-          _dio.options,
-          _path,
-        ),
+        requestOptions: _options.compose(_dio.options, _path),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -85,9 +76,10 @@ _bodyData=jsonEncode(loginRequest);
     Token? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<Token, Token>(rawData, 'Token', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<Token, Token>(rawData, 'Token', growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -111,10 +103,10 @@ _responseData = rawData == null ? null : deserialize<Token, Token>(rawData, 'Tok
   }
 
   /// Refresh Token
-  /// 
+  ///
   ///
   /// Parameters:
-  /// * [tokenRefreshRequest] 
+  /// * [tokenRefreshRequest]
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
   /// * [headers] - Can be used to add additional headers to the request
   /// * [extras] - Can be used to add flags to the request
@@ -124,7 +116,7 @@ _responseData = rawData == null ? null : deserialize<Token, Token>(rawData, 'Tok
   ///
   /// Returns a [Future] containing a [Response] with a [Token] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<Token>> refreshTokenApiV1AuthRefreshPost({ 
+  Future<Response<Token>> refreshTokenApiV1AuthRefreshPost({
     required TokenRefreshRequest tokenRefreshRequest,
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
@@ -136,13 +128,8 @@ _responseData = rawData == null ? null : deserialize<Token, Token>(rawData, 'Tok
     final _path = r'/api/v1/auth/refresh';
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
-      extra: <String, dynamic>{
-        'secure': <Map<String, String>>[],
-        ...?extra,
-      },
+      headers: <String, dynamic>{...?headers},
+      extra: <String, dynamic>{'secure': <Map<String, String>>[], ...?extra},
       contentType: 'application/json',
       validateStatus: validateStatus,
     );
@@ -150,13 +137,10 @@ _responseData = rawData == null ? null : deserialize<Token, Token>(rawData, 'Tok
     dynamic _bodyData;
 
     try {
-_bodyData=jsonEncode(tokenRefreshRequest);
-    } catch(error, stackTrace) {
+      _bodyData = jsonEncode(tokenRefreshRequest);
+    } catch (error, stackTrace) {
       throw DioException(
-         requestOptions: _options.compose(
-          _dio.options,
-          _path,
-        ),
+        requestOptions: _options.compose(_dio.options, _path),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -175,9 +159,10 @@ _bodyData=jsonEncode(tokenRefreshRequest);
     Token? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<Token, Token>(rawData, 'Token', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<Token, Token>(rawData, 'Token', growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -199,5 +184,4 @@ _responseData = rawData == null ? null : deserialize<Token, Token>(rawData, 'Tok
       extra: _response.extra,
     );
   }
-
 }

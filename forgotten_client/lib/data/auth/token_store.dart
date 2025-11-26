@@ -1,4 +1,4 @@
-import 'models.dart';
+import 'package:forgotten_client/data/auth/models.dart';
 
 /// Abstraction over secure token storage; platform implementations can back
 /// this with Keychain/Keystore/secure storage. An in-memory fallback is

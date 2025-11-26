@@ -1,5 +1,5 @@
-import 'bootstrap.dart';
-import 'config/app_config.dart';
+import 'package:forgotten_client/bootstrap.dart';
+import 'package:forgotten_client/config/app_config.dart';
 
 Future<void> main() async {
   const defaults = AppConfigDefaults(

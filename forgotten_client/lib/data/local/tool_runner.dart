@@ -9,12 +9,7 @@ class ToolRunner {
     List<String> args, {
     String? workingDirectory,
   }) {
-    return Process.run(
-      executable,
-      args,
-      workingDirectory: workingDirectory,
-      runInShell: false,
-    );
+    return Process.run(executable, args, workingDirectory: workingDirectory);
   }
 
   Stream<String> runStream(
@@ -26,7 +21,6 @@ class ToolRunner {
       executable,
       args,
       workingDirectory: workingDirectory,
-      runInShell: false,
     );
 
     final outputStream = StreamGroup.merge([
@@ -54,7 +48,7 @@ class ToolRunner {
     ]);
 
     if (result.exitCode != 0) {
-      throw Exception('ffprobe failed: \${result.stderr}');
+      throw Exception(r'ffprobe failed: ${result.stderr}');
     }
 
     return jsonDecode(result.stdout as String) as Map<String, dynamic>;
@@ -73,20 +67,68 @@ class ToolRunner {
     ]);
 
     if (result.exitCode != 0) {
-      throw Exception('ffmpeg thumbnail failed: \${result.stderr}');
+      throw Exception(r'ffmpeg thumbnail failed: ${result.stderr}');
     }
   }
+
   Future<Map<String, dynamic>> getYouTubeMetadata(String url) async {
-    final result = await run('yt-dlp', [
-      '--dump-json',
-      '--skip-download',
-      url,
-    ]);
+    final result = await run('yt-dlp', ['--dump-json', '--skip-download', url]);
 
     if (result.exitCode != 0) {
       throw Exception('yt-dlp metadata failed: ${result.stderr}');
     }
 
     return jsonDecode(result.stdout as String) as Map<String, dynamic>;
+  }
+
+  Future<void> downloadTranscript(
+    String url,
+    String outputPath,
+    String language,
+  ) async {
+    // yt-dlp will append .en.vtt to the output path if we don't be careful
+    // We use -o to specify the base name
+    final result = await run('yt-dlp', [
+      '--write-auto-sub',
+      '--sub-lang',
+      language,
+      '--sub-format',
+      'vtt',
+      '--skip-download',
+      '-o',
+      outputPath.replaceAll('.vtt', ''), // yt-dlp adds extension
+      url,
+    ]);
+
+    if (result.exitCode != 0) {
+      throw Exception('yt-dlp transcript failed: ${result.stderr}');
+    }
+  }
+
+  Future<void> renderClip(
+    String sourcePath,
+    double start,
+    double end,
+    String outputPath,
+  ) async {
+    // Using re-encode for frame accuracy. -ss after -i is slower but accurate.
+    final result = await run('ffmpeg', [
+      '-y',
+      '-i',
+      sourcePath,
+      '-ss',
+      start.toString(),
+      '-to',
+      end.toString(),
+      '-c:v',
+      'libx264',
+      '-c:a',
+      'aac',
+      outputPath,
+    ]);
+
+    if (result.exitCode != 0) {
+      throw Exception('ffmpeg clip render failed: ${result.stderr}');
+    }
   }
 }

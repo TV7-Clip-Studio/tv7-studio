@@ -12,7 +12,6 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'video_read.g.dart';
 
-
 @CopyWith()
 @JsonSerializable(
   checked: true,
@@ -23,321 +22,150 @@ part 'video_read.g.dart';
 class VideoRead {
   /// Returns a new [VideoRead] instance.
   VideoRead({
+    required this.id,
 
-    required  this.id,
+    required this.sourceUrl,
 
-    required  this.sourceUrl,
+    required this.localPath,
 
-    required  this.localPath,
+    required this.ingestType,
 
-    required  this.ingestType,
+    this.originalFilename,
 
-     this.originalFilename,
+    this.uploadChecksum,
 
-     this.uploadChecksum,
+    this.uploadFileSizeBytes,
 
-     this.uploadFileSizeBytes,
+    required this.transcriptText,
 
-    required  this.transcriptText,
+    this.transcriptLanguage,
 
-     this.transcriptLanguage,
+    this.durationSeconds,
 
-     this.durationSeconds,
+    this.fileSizeBytes,
 
-     this.fileSizeBytes,
+    this.errorMessage,
 
-     this.errorMessage,
+    this.workspaceRoot,
 
-     this.workspaceRoot,
+    required this.status,
 
-    required  this.status,
+    required this.clipGenerationMode,
 
-    required  this.clipGenerationMode,
+    required this.createdAt,
 
-    required  this.createdAt,
+    required this.updatedAt,
 
-    required  this.updatedAt,
+    this.requestedByUserId,
 
-     this.requestedByUserId,
-
-     this.clips,
+    this.clips,
   });
 
-  @JsonKey(
-    
-    name: r'id',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'id', required: true)
   final int id;
 
-
-
-  @JsonKey(
-    
-    name: r'source_url',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'source_url', required: true)
   final String sourceUrl;
 
-
-
-  @JsonKey(
-    
-    name: r'local_path',
-    required: true,
-    includeIfNull: true,
-  )
-
-
+  @JsonKey(name: r'local_path', required: true, includeIfNull: true)
   final String? localPath;
 
-
-
-  @JsonKey(
-    
-    name: r'ingest_type',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'ingest_type', required: true)
   final VideoIngestType ingestType;
 
-
-
-  @JsonKey(
-    
-    name: r'original_filename',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'original_filename', required: false)
   final String? originalFilename;
 
-
-
-  @JsonKey(
-    
-    name: r'upload_checksum',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'upload_checksum', required: false)
   final String? uploadChecksum;
 
-
-
-  @JsonKey(
-    
-    name: r'upload_file_size_bytes',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'upload_file_size_bytes', required: false)
   final int? uploadFileSizeBytes;
 
-
-
-  @JsonKey(
-    
-    name: r'transcript_text',
-    required: true,
-    includeIfNull: true,
-  )
-
-
+  @JsonKey(name: r'transcript_text', required: true, includeIfNull: true)
   final String? transcriptText;
 
-
-
-  @JsonKey(
-    
-    name: r'transcript_language',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'transcript_language', required: false)
   final String? transcriptLanguage;
 
-
-
-  @JsonKey(
-    
-    name: r'duration_seconds',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'duration_seconds', required: false)
   final int? durationSeconds;
 
-
-
-  @JsonKey(
-    
-    name: r'file_size_bytes',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'file_size_bytes', required: false)
   final int? fileSizeBytes;
 
-
-
-  @JsonKey(
-    
-    name: r'error_message',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'error_message', required: false)
   final String? errorMessage;
 
-
-
-  @JsonKey(
-    
-    name: r'workspace_root',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'workspace_root', required: false)
   final String? workspaceRoot;
 
-
-
-  @JsonKey(
-    
-    name: r'status',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'status', required: true)
   final VideoStatus status;
 
-
-
-  @JsonKey(
-    
-    name: r'clip_generation_mode',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'clip_generation_mode', required: true)
   final ClipGenerationMode clipGenerationMode;
 
-
-
-  @JsonKey(
-    
-    name: r'created_at',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'created_at', required: true)
   final DateTime createdAt;
 
-
-
-  @JsonKey(
-    
-    name: r'updated_at',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'updated_at', required: true)
   final DateTime updatedAt;
 
-
-
-  @JsonKey(
-    
-    name: r'requested_by_user_id',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'requested_by_user_id', required: false)
   final int? requestedByUserId;
 
-
-
-  @JsonKey(
-    
-    name: r'clips',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'clips', required: false)
   final List<ClipRead>? clips;
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VideoRead &&
+          other.id == id &&
+          other.sourceUrl == sourceUrl &&
+          other.localPath == localPath &&
+          other.ingestType == ingestType &&
+          other.originalFilename == originalFilename &&
+          other.uploadChecksum == uploadChecksum &&
+          other.uploadFileSizeBytes == uploadFileSizeBytes &&
+          other.transcriptText == transcriptText &&
+          other.transcriptLanguage == transcriptLanguage &&
+          other.durationSeconds == durationSeconds &&
+          other.fileSizeBytes == fileSizeBytes &&
+          other.errorMessage == errorMessage &&
+          other.workspaceRoot == workspaceRoot &&
+          other.status == status &&
+          other.clipGenerationMode == clipGenerationMode &&
+          other.createdAt == createdAt &&
+          other.updatedAt == updatedAt &&
+          other.requestedByUserId == requestedByUserId &&
+          other.clips == clips;
 
+  @override
+  int get hashCode =>
+      id.hashCode +
+      sourceUrl.hashCode +
+      (localPath == null ? 0 : localPath.hashCode) +
+      ingestType.hashCode +
+      (originalFilename == null ? 0 : originalFilename.hashCode) +
+      (uploadChecksum == null ? 0 : uploadChecksum.hashCode) +
+      (uploadFileSizeBytes == null ? 0 : uploadFileSizeBytes.hashCode) +
+      (transcriptText == null ? 0 : transcriptText.hashCode) +
+      (transcriptLanguage == null ? 0 : transcriptLanguage.hashCode) +
+      (durationSeconds == null ? 0 : durationSeconds.hashCode) +
+      (fileSizeBytes == null ? 0 : fileSizeBytes.hashCode) +
+      (errorMessage == null ? 0 : errorMessage.hashCode) +
+      (workspaceRoot == null ? 0 : workspaceRoot.hashCode) +
+      status.hashCode +
+      clipGenerationMode.hashCode +
+      createdAt.hashCode +
+      updatedAt.hashCode +
+      (requestedByUserId == null ? 0 : requestedByUserId.hashCode) +
+      clips.hashCode;
 
-
-
-    @override
-    bool operator ==(Object other) => identical(this, other) || other is VideoRead &&
-      other.id == id &&
-      other.sourceUrl == sourceUrl &&
-      other.localPath == localPath &&
-      other.ingestType == ingestType &&
-      other.originalFilename == originalFilename &&
-      other.uploadChecksum == uploadChecksum &&
-      other.uploadFileSizeBytes == uploadFileSizeBytes &&
-      other.transcriptText == transcriptText &&
-      other.transcriptLanguage == transcriptLanguage &&
-      other.durationSeconds == durationSeconds &&
-      other.fileSizeBytes == fileSizeBytes &&
-      other.errorMessage == errorMessage &&
-      other.workspaceRoot == workspaceRoot &&
-      other.status == status &&
-      other.clipGenerationMode == clipGenerationMode &&
-      other.createdAt == createdAt &&
-      other.updatedAt == updatedAt &&
-      other.requestedByUserId == requestedByUserId &&
-      other.clips == clips;
-
-    @override
-    int get hashCode =>
-        id.hashCode +
-        sourceUrl.hashCode +
-        (localPath == null ? 0 : localPath.hashCode) +
-        ingestType.hashCode +
-        (originalFilename == null ? 0 : originalFilename.hashCode) +
-        (uploadChecksum == null ? 0 : uploadChecksum.hashCode) +
-        (uploadFileSizeBytes == null ? 0 : uploadFileSizeBytes.hashCode) +
-        (transcriptText == null ? 0 : transcriptText.hashCode) +
-        (transcriptLanguage == null ? 0 : transcriptLanguage.hashCode) +
-        (durationSeconds == null ? 0 : durationSeconds.hashCode) +
-        (fileSizeBytes == null ? 0 : fileSizeBytes.hashCode) +
-        (errorMessage == null ? 0 : errorMessage.hashCode) +
-        (workspaceRoot == null ? 0 : workspaceRoot.hashCode) +
-        status.hashCode +
-        clipGenerationMode.hashCode +
-        createdAt.hashCode +
-        updatedAt.hashCode +
-        (requestedByUserId == null ? 0 : requestedByUserId.hashCode) +
-        clips.hashCode;
-
-  factory VideoRead.fromJson(Map<String, dynamic> json) => _$VideoReadFromJson(json);
+  factory VideoRead.fromJson(Map<String, dynamic> json) =>
+      _$VideoReadFromJson(json);
 
   Map<String, dynamic> toJson() => _$VideoReadToJson(this);
 
@@ -345,6 +173,4 @@ class VideoRead {
   String toString() {
     return toJson().toString();
   }
-
 }
-

@@ -17,7 +17,7 @@ class _CapturingAdapter implements HttpClientAdapter {
   ) async {
     lastOptions = options;
     return ResponseBody.fromString(
-      'ok',
+      '{}',
       200,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
@@ -57,7 +57,7 @@ void main() {
   });
 
   test('omits Authorization header when no token is stored', () async {
-    await client.dio.get('/hello');
+    await client.dio.get<void>('/hello');
 
     expect(adapter.lastOptions, isNotNull);
     expect(adapter.lastOptions!.headers.containsKey('Authorization'), isFalse);
@@ -72,7 +72,7 @@ void main() {
       ),
     );
 
-    await client.dio.get('/hello');
+    await client.dio.get<void>('/hello');
 
     expect(adapter.lastOptions, isNotNull);
     expect(adapter.lastOptions!.headers['Authorization'], 'Bearer abc123');

@@ -18,7 +18,10 @@ void main() {
       expect(config.flavor, defaults.flavor);
       expect(config.apiBaseUrl.toString(), defaults.apiBaseUrl);
       expect(config.openAiMode, defaults.openAiMode);
-      expect(config.featureFlags, {'publishing': false, 'local_highlights': true});
+      expect(config.featureFlags, {
+        'publishing': false,
+        'local_highlights': true,
+      });
       expect(config.appLogLevel, defaults.appLogLevel);
     });
 

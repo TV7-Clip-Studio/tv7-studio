@@ -9,7 +9,6 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'video_ingest_response.g.dart';
 
-
 @CopyWith()
 @JsonSerializable(
   checked: true,
@@ -20,65 +19,35 @@ part 'video_ingest_response.g.dart';
 class VideoIngestResponse {
   /// Returns a new [VideoIngestResponse] instance.
   VideoIngestResponse({
+    required this.video,
 
-    required  this.video,
+    this.queued = true,
 
-     this.queued = true,
-
-    required  this.created,
+    required this.created,
   });
 
-  @JsonKey(
-    
-    name: r'video',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'video', required: true)
   final VideoRead video;
 
-
-
-  @JsonKey(
-    defaultValue: true,
-    name: r'queued',
-    required: false,
-    
-  )
-
-
+  @JsonKey(defaultValue: true, name: r'queued', required: false)
   final bool? queued;
 
-
-
-  @JsonKey(
-    
-    name: r'created',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'created', required: true)
   final bool created;
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VideoIngestResponse &&
+          other.video == video &&
+          other.queued == queued &&
+          other.created == created;
 
+  @override
+  int get hashCode => video.hashCode + queued.hashCode + created.hashCode;
 
-
-
-    @override
-    bool operator ==(Object other) => identical(this, other) || other is VideoIngestResponse &&
-      other.video == video &&
-      other.queued == queued &&
-      other.created == created;
-
-    @override
-    int get hashCode =>
-        video.hashCode +
-        queued.hashCode +
-        created.hashCode;
-
-  factory VideoIngestResponse.fromJson(Map<String, dynamic> json) => _$VideoIngestResponseFromJson(json);
+  factory VideoIngestResponse.fromJson(Map<String, dynamic> json) =>
+      _$VideoIngestResponseFromJson(json);
 
   Map<String, dynamic> toJson() => _$VideoIngestResponseToJson(this);
 
@@ -86,6 +55,4 @@ class VideoIngestResponse {
   String toString() {
     return toJson().toString();
   }
-
 }
-

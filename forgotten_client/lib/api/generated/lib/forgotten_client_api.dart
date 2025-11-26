@@ -8,7 +8,6 @@ export 'package:forgotten_client_api/src/auth/basic_auth.dart';
 export 'package:forgotten_client_api/src/auth/bearer_auth.dart';
 export 'package:forgotten_client_api/src/auth/oauth.dart';
 
-
 export 'package:forgotten_client_api/src/api/admin_api.dart';
 export 'package:forgotten_client_api/src/api/ai_api.dart';
 export 'package:forgotten_client_api/src/api/auth_api.dart';
@@ -46,4 +45,3 @@ export 'package:forgotten_client_api/src/model/video_ingest_type.dart';
 export 'package:forgotten_client_api/src/model/video_read.dart';
 export 'package:forgotten_client_api/src/model/video_status.dart';
 export 'package:forgotten_client_api/src/model/you_tube_ingest_request.dart';
-

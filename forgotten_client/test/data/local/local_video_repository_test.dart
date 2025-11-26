@@ -2,12 +2,11 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
-
 import 'package:forgotten_client/data/local/local_video_repository.dart';
 import 'package:forgotten_client/data/local/tool_runner.dart';
 import 'package:forgotten_client_api/forgotten_client_api.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 class _FakePathProvider extends PathProviderPlatform {
   _FakePathProvider(this.documentsPath);
@@ -39,12 +38,20 @@ class _FakeToolRunner extends ToolRunner {
   }
 
   @override
-  Future<ProcessResult> run(String executable, List<String> args, {String? workingDirectory}) async {
+  Future<ProcessResult> run(
+    String executable,
+    List<String> args, {
+    String? workingDirectory,
+  }) async {
     return ProcessResult(0, 0, '', '');
   }
 
   @override
-  Stream<String> runStream(String executable, List<String> args, {String? workingDirectory}) async* {}
+  Stream<String> runStream(
+    String executable,
+    List<String> args, {
+    String? workingDirectory,
+  }) async* {}
 }
 
 void main() {
@@ -66,9 +73,12 @@ void main() {
         ],
       },
     );
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost'));
     repository = LocalVideoRepository(
       toolRunner: toolRunner,
-      videosApi: VideosApi(Dio(BaseOptions(baseUrl: 'http://localhost'))),
+      videosApi: VideosApi(dio),
+      uploadsApi: UploadsApi(dio),
+      dio: dio,
     );
   });
 
@@ -81,14 +91,21 @@ void main() {
     final workspace = Directory(p.join(tempDir.path, 'forgotten_workspace'));
     await workspace.create(recursive: true);
 
-    final older = File(p.join(workspace.path, 'older.mp4'))..writeAsStringSync('data1');
-    final newer = File(p.join(workspace.path, 'newer.mkv'))..writeAsStringSync('data2');
-    await older.setLastModified(DateTime.now().subtract(const Duration(minutes: 5)));
+    final older = File(p.join(workspace.path, 'older.mp4'))
+      ..writeAsStringSync('data1');
+    final newer = File(p.join(workspace.path, 'newer.mkv'))
+      ..writeAsStringSync('data2');
+    await older.setLastModified(
+      DateTime.now().subtract(const Duration(minutes: 5)),
+    );
     await newer.setLastModified(DateTime.now());
 
     final items = await repository.getVideos();
 
-    expect(items.map((i) => p.basename(i.file.path)).toList(), ['newer.mkv', 'older.mp4']);
+    expect(items.map((i) => p.basename(i.file.path)).toList(), [
+      'newer.mkv',
+      'older.mp4',
+    ]);
     expect(items.first.duration, isNotNull);
     expect(toolRunner.mediaInfoRequests.length, 2);
     expect(toolRunner.thumbnailRequests.length, 2);
@@ -104,7 +121,8 @@ void main() {
     final workspace = Directory(p.join(tempDir.path, 'forgotten_workspace'));
     await workspace.create(recursive: true);
 
-    final video = File(p.join(workspace.path, 'clip.mp4'))..writeAsStringSync('data');
+    final video = File(p.join(workspace.path, 'clip.mp4'))
+      ..writeAsStringSync('data');
     final meta = File('${video.path}.meta.json')..writeAsStringSync('{}');
     final thumb = File('${video.path}.thumb.jpg')..writeAsStringSync('thumb');
 

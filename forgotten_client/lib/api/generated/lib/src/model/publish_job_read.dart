@@ -9,7 +9,6 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'publish_job_read.g.dart';
 
-
 @CopyWith()
 @JsonSerializable(
   checked: true,
@@ -20,193 +19,94 @@ part 'publish_job_read.g.dart';
 class PublishJobRead {
   /// Returns a new [PublishJobRead] instance.
   PublishJobRead({
+    required this.id,
 
-    required  this.id,
+    required this.clipId,
 
-    required  this.clipId,
+    required this.platform,
 
-    required  this.platform,
+    required this.status,
 
-    required  this.status,
+    this.assetUrl,
 
-     this.assetUrl,
+    this.assetChecksum,
 
-     this.assetChecksum,
+    this.assetSizeBytes,
 
-     this.assetSizeBytes,
+    this.responsePayload,
 
-     this.responsePayload,
+    this.errorMessage,
 
-     this.errorMessage,
+    required this.createdAt,
 
-    required  this.createdAt,
-
-    required  this.updatedAt,
+    required this.updatedAt,
   });
 
-  @JsonKey(
-    
-    name: r'id',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'id', required: true)
   final int id;
 
-
-
-  @JsonKey(
-    
-    name: r'clip_id',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'clip_id', required: true)
   final int clipId;
 
-
-
-  @JsonKey(
-    
-    name: r'platform',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'platform', required: true)
   final String platform;
 
-
-
-  @JsonKey(
-    
-    name: r'status',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'status', required: true)
   final PublishJobStatus status;
 
-
-
-  @JsonKey(
-    
-    name: r'asset_url',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'asset_url', required: false)
   final String? assetUrl;
 
-
-
-  @JsonKey(
-    
-    name: r'asset_checksum',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'asset_checksum', required: false)
   final String? assetChecksum;
 
-
-
-  @JsonKey(
-    
-    name: r'asset_size_bytes',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'asset_size_bytes', required: false)
   final int? assetSizeBytes;
 
-
-
-  @JsonKey(
-    
-    name: r'response_payload',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'response_payload', required: false)
   final String? responsePayload;
 
-
-
-  @JsonKey(
-    
-    name: r'error_message',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'error_message', required: false)
   final String? errorMessage;
 
-
-
-  @JsonKey(
-    
-    name: r'created_at',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'created_at', required: true)
   final DateTime createdAt;
 
-
-
-  @JsonKey(
-    
-    name: r'updated_at',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'updated_at', required: true)
   final DateTime updatedAt;
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PublishJobRead &&
+          other.id == id &&
+          other.clipId == clipId &&
+          other.platform == platform &&
+          other.status == status &&
+          other.assetUrl == assetUrl &&
+          other.assetChecksum == assetChecksum &&
+          other.assetSizeBytes == assetSizeBytes &&
+          other.responsePayload == responsePayload &&
+          other.errorMessage == errorMessage &&
+          other.createdAt == createdAt &&
+          other.updatedAt == updatedAt;
 
+  @override
+  int get hashCode =>
+      id.hashCode +
+      clipId.hashCode +
+      platform.hashCode +
+      status.hashCode +
+      (assetUrl == null ? 0 : assetUrl.hashCode) +
+      (assetChecksum == null ? 0 : assetChecksum.hashCode) +
+      (assetSizeBytes == null ? 0 : assetSizeBytes.hashCode) +
+      (responsePayload == null ? 0 : responsePayload.hashCode) +
+      (errorMessage == null ? 0 : errorMessage.hashCode) +
+      createdAt.hashCode +
+      updatedAt.hashCode;
 
-
-
-    @override
-    bool operator ==(Object other) => identical(this, other) || other is PublishJobRead &&
-      other.id == id &&
-      other.clipId == clipId &&
-      other.platform == platform &&
-      other.status == status &&
-      other.assetUrl == assetUrl &&
-      other.assetChecksum == assetChecksum &&
-      other.assetSizeBytes == assetSizeBytes &&
-      other.responsePayload == responsePayload &&
-      other.errorMessage == errorMessage &&
-      other.createdAt == createdAt &&
-      other.updatedAt == updatedAt;
-
-    @override
-    int get hashCode =>
-        id.hashCode +
-        clipId.hashCode +
-        platform.hashCode +
-        status.hashCode +
-        (assetUrl == null ? 0 : assetUrl.hashCode) +
-        (assetChecksum == null ? 0 : assetChecksum.hashCode) +
-        (assetSizeBytes == null ? 0 : assetSizeBytes.hashCode) +
-        (responsePayload == null ? 0 : responsePayload.hashCode) +
-        (errorMessage == null ? 0 : errorMessage.hashCode) +
-        createdAt.hashCode +
-        updatedAt.hashCode;
-
-  factory PublishJobRead.fromJson(Map<String, dynamic> json) => _$PublishJobReadFromJson(json);
+  factory PublishJobRead.fromJson(Map<String, dynamic> json) =>
+      _$PublishJobReadFromJson(json);
 
   Map<String, dynamic> toJson() => _$PublishJobReadToJson(this);
 
@@ -214,6 +114,4 @@ class PublishJobRead {
   String toString() {
     return toJson().toString();
   }
-
 }
-

@@ -3,7 +3,5 @@ import 'package:forgotten_client_api/forgotten_client_api.dart';
 
 // tests for VideoIngestType
 void main() {
-
-  group(VideoIngestType, () {
-  });
+  group(VideoIngestType, () {});
 }

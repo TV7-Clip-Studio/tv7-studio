@@ -14,16 +14,15 @@ import 'package:forgotten_client_api/src/model/ai_response.dart';
 import 'package:forgotten_client_api/src/model/http_validation_error.dart';
 
 class AiApi {
-
   final Dio _dio;
 
   const AiApi(this._dio);
 
   /// Execute
-  /// 
+  ///
   ///
   /// Parameters:
-  /// * [aIRequest] 
+  /// * [aIRequest]
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
   /// * [headers] - Can be used to add additional headers to the request
   /// * [extras] - Can be used to add flags to the request
@@ -33,7 +32,7 @@ class AiApi {
   ///
   /// Returns a [Future] containing a [Response] with a [AIResponse] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<AIResponse>> executeApiV1AiExecutePost({ 
+  Future<Response<AIResponse>> executeApiV1AiExecutePost({
     required AIRequest aIRequest,
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
@@ -45,16 +44,10 @@ class AiApi {
     final _path = r'/api/v1/ai/execute';
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
+      headers: <String, dynamic>{...?headers},
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {
-            'type': 'http',
-            'scheme': 'bearer',
-            'name': 'HTTPBearer',
-          },
+          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
         ],
         ...?extra,
       },
@@ -65,13 +58,10 @@ class AiApi {
     dynamic _bodyData;
 
     try {
-_bodyData=jsonEncode(aIRequest);
-    } catch(error, stackTrace) {
+      _bodyData = jsonEncode(aIRequest);
+    } catch (error, stackTrace) {
       throw DioException(
-         requestOptions: _options.compose(
-          _dio.options,
-          _path,
-        ),
+        requestOptions: _options.compose(_dio.options, _path),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -90,9 +80,14 @@ _bodyData=jsonEncode(aIRequest);
     AIResponse? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<AIResponse, AIResponse>(rawData, 'AIResponse', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<AIResponse, AIResponse>(
+              rawData,
+              'AIResponse',
+              growable: true,
+            );
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -114,5 +109,4 @@ _responseData = rawData == null ? null : deserialize<AIResponse, AIResponse>(raw
       extra: _response.extra,
     );
   }
-
 }

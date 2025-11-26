@@ -14,16 +14,15 @@ import 'package:forgotten_client_api/src/model/user_create.dart';
 import 'package:forgotten_client_api/src/model/user_read.dart';
 
 class UsersApi {
-
   final Dio _dio;
 
   const UsersApi(this._dio);
 
   /// Create User Endpoint
-  /// 
+  ///
   ///
   /// Parameters:
-  /// * [userCreate] 
+  /// * [userCreate]
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
   /// * [headers] - Can be used to add additional headers to the request
   /// * [extras] - Can be used to add flags to the request
@@ -33,7 +32,7 @@ class UsersApi {
   ///
   /// Returns a [Future] containing a [Response] with a [UserRead] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<UserRead>> createUserEndpointApiV1UsersPost({ 
+  Future<Response<UserRead>> createUserEndpointApiV1UsersPost({
     required UserCreate userCreate,
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
@@ -45,16 +44,10 @@ class UsersApi {
     final _path = r'/api/v1/users/';
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
+      headers: <String, dynamic>{...?headers},
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {
-            'type': 'http',
-            'scheme': 'bearer',
-            'name': 'HTTPBearer',
-          },
+          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
         ],
         ...?extra,
       },
@@ -65,13 +58,10 @@ class UsersApi {
     dynamic _bodyData;
 
     try {
-_bodyData=jsonEncode(userCreate);
-    } catch(error, stackTrace) {
+      _bodyData = jsonEncode(userCreate);
+    } catch (error, stackTrace) {
       throw DioException(
-         requestOptions: _options.compose(
-          _dio.options,
-          _path,
-        ),
+        requestOptions: _options.compose(_dio.options, _path),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -90,9 +80,14 @@ _bodyData=jsonEncode(userCreate);
     UserRead? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<UserRead, UserRead>(rawData, 'UserRead', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<UserRead, UserRead>(
+              rawData,
+              'UserRead',
+              growable: true,
+            );
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -116,7 +111,7 @@ _responseData = rawData == null ? null : deserialize<UserRead, UserRead>(rawData
   }
 
   /// List Users Endpoint
-  /// 
+  ///
   ///
   /// Parameters:
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
@@ -128,7 +123,7 @@ _responseData = rawData == null ? null : deserialize<UserRead, UserRead>(rawData
   ///
   /// Returns a [Future] containing a [Response] with a [List<UserRead>] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<List<UserRead>>> listUsersEndpointApiV1UsersGet({ 
+  Future<Response<List<UserRead>>> listUsersEndpointApiV1UsersGet({
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
     Map<String, dynamic>? extra,
@@ -139,16 +134,10 @@ _responseData = rawData == null ? null : deserialize<UserRead, UserRead>(rawData
     final _path = r'/api/v1/users/';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
+      headers: <String, dynamic>{...?headers},
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {
-            'type': 'http',
-            'scheme': 'bearer',
-            'name': 'HTTPBearer',
-          },
+          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
         ],
         ...?extra,
       },
@@ -166,9 +155,14 @@ _responseData = rawData == null ? null : deserialize<UserRead, UserRead>(rawData
     List<UserRead>? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<List<UserRead>, UserRead>(rawData, 'List<UserRead>', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<List<UserRead>, UserRead>(
+              rawData,
+              'List<UserRead>',
+              growable: true,
+            );
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -190,5 +184,4 @@ _responseData = rawData == null ? null : deserialize<List<UserRead>, UserRead>(r
       extra: _response.extra,
     );
   }
-
 }
