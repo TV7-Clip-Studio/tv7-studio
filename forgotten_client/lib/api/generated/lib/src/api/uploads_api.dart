@@ -13,7 +13,6 @@ import 'package:forgotten_client_api/src/model/asset_upload_response.dart';
 import 'package:forgotten_client_api/src/model/http_validation_error.dart';
 
 class UploadsApi {
-
   final Dio _dio;
 
   const UploadsApi(this._dio);
@@ -22,7 +21,7 @@ class UploadsApi {
   /// Accept multipart asset upload from Flutter; store under MEDIA_STORAGE_DIR.
   ///
   /// Parameters:
-  /// * [file] 
+  /// * [file]
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
   /// * [headers] - Can be used to add additional headers to the request
   /// * [extras] - Can be used to add flags to the request
@@ -32,7 +31,7 @@ class UploadsApi {
   ///
   /// Returns a [Future] containing a [Response] with a [AssetUploadResponse] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<AssetUploadResponse>> uploadAssetApiV1UploadsAssetsPost({ 
+  Future<Response<AssetUploadResponse>> uploadAssetApiV1UploadsAssetsPost({
     required MultipartFile file,
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
@@ -44,16 +43,10 @@ class UploadsApi {
     final _path = r'/api/v1/uploads/assets';
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
+      headers: <String, dynamic>{...?headers},
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {
-            'type': 'http',
-            'scheme': 'bearer',
-            'name': 'HTTPBearer',
-          },
+          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
         ],
         ...?extra,
       },
@@ -64,13 +57,10 @@ class UploadsApi {
     dynamic _bodyData;
 
     try {
-
-    } catch(error, stackTrace) {
+      _bodyData = FormData.fromMap(<String, dynamic>{'file': file});
+    } catch (error, stackTrace) {
       throw DioException(
-         requestOptions: _options.compose(
-          _dio.options,
-          _path,
-        ),
+        requestOptions: _options.compose(_dio.options, _path),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -89,9 +79,14 @@ class UploadsApi {
     AssetUploadResponse? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<AssetUploadResponse, AssetUploadResponse>(rawData, 'AssetUploadResponse', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<AssetUploadResponse, AssetUploadResponse>(
+              rawData,
+              'AssetUploadResponse',
+              growable: true,
+            );
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -113,5 +108,4 @@ _responseData = rawData == null ? null : deserialize<AssetUploadResponse, AssetU
       extra: _response.extra,
     );
   }
-
 }

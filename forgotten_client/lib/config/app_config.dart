@@ -25,29 +25,21 @@ class AppConfig {
     required this.appLogLevel,
   });
 
-  final String flavor;
-  final Uri apiBaseUrl;
-  final String openAiMode;
-  final Map<String, dynamic> featureFlags;
-  final String appLogLevel;
-
   factory AppConfig.fromEnvironment({required AppConfigDefaults defaults}) {
-    final flavorOverride = const String.fromEnvironment('FLAVOR');
-    final apiBaseUrlOverride = const String.fromEnvironment('API_BASE_URL');
-    final openAiModeOverride = const String.fromEnvironment('OPENAI_MODE');
-    final appLogLevelOverride = const String.fromEnvironment('APP_LOG_LEVEL');
-    final featureFlagsOverride =
-        const String.fromEnvironment('FEATURE_FLAGS_JSON');
+    const flavorOverride = String.fromEnvironment('FLAVOR');
+    const apiBaseUrlOverride = String.fromEnvironment('API_BASE_URL');
+    const openAiModeOverride = String.fromEnvironment('OPENAI_MODE');
+    const appLogLevelOverride = String.fromEnvironment('APP_LOG_LEVEL');
+    const featureFlagsOverride = String.fromEnvironment('FEATURE_FLAGS_JSON');
 
     return AppConfig(
       flavor: flavorOverride.isEmpty ? defaults.flavor : flavorOverride,
       apiBaseUrl: Uri.parse(
-        apiBaseUrlOverride.isEmpty
-            ? defaults.apiBaseUrl
-            : apiBaseUrlOverride,
+        apiBaseUrlOverride.isEmpty ? defaults.apiBaseUrl : apiBaseUrlOverride,
       ),
-      openAiMode:
-          openAiModeOverride.isEmpty ? defaults.openAiMode : openAiModeOverride,
+      openAiMode: openAiModeOverride.isEmpty
+          ? defaults.openAiMode
+          : openAiModeOverride,
       featureFlags: _decodeFeatureFlags(
         featureFlagsOverride.isEmpty
             ? defaults.featureFlagsJson
@@ -58,6 +50,12 @@ class AppConfig {
           : appLogLevelOverride,
     );
   }
+
+  final String flavor;
+  final Uri apiBaseUrl;
+  final String openAiMode;
+  final Map<String, dynamic> featureFlags;
+  final String appLogLevel;
 
   static Map<String, dynamic> _decodeFeatureFlags(String source) {
     if (source.trim().isEmpty) return {};

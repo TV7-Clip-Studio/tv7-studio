@@ -9,7 +9,6 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'validation_error.g.dart';
 
-
 @CopyWith()
 @JsonSerializable(
   checked: true,
@@ -19,66 +18,30 @@ part 'validation_error.g.dart';
 )
 class ValidationError {
   /// Returns a new [ValidationError] instance.
-  ValidationError({
+  ValidationError({required this.loc, required this.msg, required this.type});
 
-    required  this.loc,
-
-    required  this.msg,
-
-    required  this.type,
-  });
-
-  @JsonKey(
-    
-    name: r'loc',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'loc', required: true)
   final List<ValidationErrorLocInner> loc;
 
-
-
-  @JsonKey(
-    
-    name: r'msg',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'msg', required: true)
   final String msg;
 
-
-
-  @JsonKey(
-    
-    name: r'type',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'type', required: true)
   final String type;
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ValidationError &&
+          other.loc == loc &&
+          other.msg == msg &&
+          other.type == type;
 
+  @override
+  int get hashCode => loc.hashCode + msg.hashCode + type.hashCode;
 
-
-
-    @override
-    bool operator ==(Object other) => identical(this, other) || other is ValidationError &&
-      other.loc == loc &&
-      other.msg == msg &&
-      other.type == type;
-
-    @override
-    int get hashCode =>
-        loc.hashCode +
-        msg.hashCode +
-        type.hashCode;
-
-  factory ValidationError.fromJson(Map<String, dynamic> json) => _$ValidationErrorFromJson(json);
+  factory ValidationError.fromJson(Map<String, dynamic> json) =>
+      _$ValidationErrorFromJson(json);
 
   Map<String, dynamic> toJson() => _$ValidationErrorToJson(this);
 
@@ -86,6 +49,4 @@ class ValidationError {
   String toString() {
     return toJson().toString();
   }
-
 }
-

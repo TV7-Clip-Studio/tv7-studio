@@ -8,7 +8,6 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'token.g.dart';
 
-
 @CopyWith()
 @JsonSerializable(
   checked: true,
@@ -19,63 +18,35 @@ part 'token.g.dart';
 class Token {
   /// Returns a new [Token] instance.
   Token({
+    required this.accessToken,
 
-    required  this.accessToken,
+    this.refreshToken,
 
-     this.refreshToken,
-
-     this.tokenType = 'bearer',
+    this.tokenType = 'bearer',
   });
 
-  @JsonKey(
-    
-    name: r'access_token',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'access_token', required: true)
   final String accessToken;
 
-
-
-  @JsonKey(
-    
-    name: r'refresh_token',
-    required: false,
-    
-  )
-
-
+  @JsonKey(name: r'refresh_token', required: false)
   final String? refreshToken;
 
-
-
-  @JsonKey(
-    defaultValue: 'bearer',
-    name: r'token_type',
-    required: false,
-    
-  )
-
-
+  @JsonKey(defaultValue: 'bearer', name: r'token_type', required: false)
   final String? tokenType;
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Token &&
+          other.accessToken == accessToken &&
+          other.refreshToken == refreshToken &&
+          other.tokenType == tokenType;
 
-
-
-
-    @override
-    bool operator ==(Object other) => identical(this, other) || other is Token &&
-      other.accessToken == accessToken &&
-      other.refreshToken == refreshToken &&
-      other.tokenType == tokenType;
-
-    @override
-    int get hashCode =>
-        accessToken.hashCode +
-        (refreshToken == null ? 0 : refreshToken.hashCode) +
-        tokenType.hashCode;
+  @override
+  int get hashCode =>
+      accessToken.hashCode +
+      (refreshToken == null ? 0 : refreshToken.hashCode) +
+      tokenType.hashCode;
 
   factory Token.fromJson(Map<String, dynamic> json) => _$TokenFromJson(json);
 
@@ -85,6 +56,4 @@ class Token {
   String toString() {
     return toJson().toString();
   }
-
 }
-

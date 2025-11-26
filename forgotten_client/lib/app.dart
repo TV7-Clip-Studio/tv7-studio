@@ -1,20 +1,18 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-
-import 'config/app_config.dart';
-import 'data/api/api_client.dart';
-import 'data/auth/auth_repository.dart';
-import 'data/auth/token_store.dart';
-import 'data/config/config_repository.dart';
-import 'data/local/local_video_repository.dart';
-import 'data/local/tool_runner.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:forgotten_client/config/app_config.dart';
+import 'package:forgotten_client/data/api/api_client.dart';
+import 'package:forgotten_client/data/auth/auth_repository.dart';
+import 'package:forgotten_client/data/auth/token_store.dart';
+import 'package:forgotten_client/data/config/config_repository.dart';
+import 'package:forgotten_client/data/local/local_video_repository.dart';
+import 'package:forgotten_client/data/local/tool_runner.dart';
+import 'package:forgotten_client/features/auth/login_form.dart';
+import 'package:forgotten_client/features/dashboard/dashboard_page.dart';
 import 'package:forgotten_client_api/forgotten_client_api.dart';
-import 'features/auth/login_form.dart';
-import 'features/dashboard/dashboard_page.dart';
 
 class App extends StatelessWidget {
-  const App({super.key, required this.config});
+  const App({required this.config, super.key});
 
   final AppConfig config;
 
@@ -41,16 +39,16 @@ class _Shell extends StatefulWidget {
   State<_Shell> createState() => _ShellState();
 }
 
-
-
 class _ShellState extends State<_Shell> {
   late final TokenStore _tokenStore;
   late final ApiClient _apiClient;
   late final AuthRepository _authRepository;
   late final ConfigRepository _configRepository;
-  late final LocalVideoRepository _localVideoRepository;
+  late final ClientVideoRepository _localVideoRepository;
   late final Dio _dio;
   late final VideosApi _videosApi;
+  late final UploadsApi _uploadsApi;
+  late final UsersApi _usersApi;
   bool _isAuthenticated = false;
 
   @override
@@ -84,7 +82,14 @@ class _ShellState extends State<_Shell> {
       ),
     );
     _videosApi = VideosApi(_dio);
-    _localVideoRepository = LocalVideoRepository(toolRunner: ToolRunner(), videosApi: _videosApi);
+    _uploadsApi = UploadsApi(_dio);
+    _usersApi = UsersApi(_dio);
+    _localVideoRepository = ClientVideoRepository(
+      toolRunner: ToolRunner(),
+      videosApi: _videosApi,
+      uploadsApi: _uploadsApi,
+      dio: _dio,
+    );
   }
 
   @override
@@ -93,22 +98,22 @@ class _ShellState extends State<_Shell> {
         ? DashboardPage(
             configRepository: _configRepository,
             localVideoRepository: _localVideoRepository,
+            authRepository: _authRepository,
+            usersApi: _usersApi,
+            onLogout: () {
+              setState(() {
+                _isAuthenticated = false;
+              });
+            },
           )
-        : Scaffold(
-            appBar: AppBar(
-              title: Text('Sign in (${widget.config.flavor})'),
-            ),
-            body: Padding(
-              padding: const EdgeInsets.all(16),
-              child: LoginForm(
-                authRepository: _authRepository,
-                onSuccess: () {
-                  setState(() {
-                    _isAuthenticated = true;
-                  });
-                },
-              ),
-            ),
+        : LoginPage(
+            authRepository: _authRepository,
+            flavor: widget.config.flavor,
+            onSuccess: () {
+              setState(() {
+                _isAuthenticated = true;
+              });
+            },
           );
   }
 }

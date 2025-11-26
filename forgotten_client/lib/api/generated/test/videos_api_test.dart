@@ -1,7 +1,6 @@
 import 'package:test/test.dart';
 import 'package:forgotten_client_api/forgotten_client_api.dart';
 
-
 /// tests for VideosApi
 void main() {
   final instance = ForgottenClientApi().getVideosApi();
@@ -34,6 +33,5 @@ void main() {
     test('test registerLocalVideoApiV1VideosLocalPost', () async {
       // TODO
     });
-
   });
 }

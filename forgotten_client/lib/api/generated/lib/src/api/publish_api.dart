@@ -14,16 +14,15 @@ import 'package:forgotten_client_api/src/model/publish_job_read.dart';
 import 'package:forgotten_client_api/src/model/publish_request.dart';
 
 class PublishApi {
-
   final Dio _dio;
 
   const PublishApi(this._dio);
 
   /// List Publish Jobs
-  /// 
+  ///
   ///
   /// Parameters:
-  /// * [clipId] 
+  /// * [clipId]
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
   /// * [headers] - Can be used to add additional headers to the request
   /// * [extras] - Can be used to add flags to the request
@@ -33,7 +32,8 @@ class PublishApi {
   ///
   /// Returns a [Future] containing a [Response] with a [List<PublishJobRead>] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<List<PublishJobRead>>> listPublishJobsApiV1ClipsClipIdPublishGet({ 
+  Future<Response<List<PublishJobRead>>>
+  listPublishJobsApiV1ClipsClipIdPublishGet({
     required int clipId,
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
@@ -42,19 +42,18 @@ class PublishApi {
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async {
-    final _path = r'/api/v1/clips/{clip_id}/publish'.replaceAll('{' r'clip_id' '}', clipId.toString());
+    final _path = r'/api/v1/clips/{clip_id}/publish'.replaceAll(
+      '{'
+      r'clip_id'
+      '}',
+      clipId.toString(),
+    );
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
+      headers: <String, dynamic>{...?headers},
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {
-            'type': 'http',
-            'scheme': 'bearer',
-            'name': 'HTTPBearer',
-          },
+          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
         ],
         ...?extra,
       },
@@ -72,9 +71,14 @@ class PublishApi {
     List<PublishJobRead>? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<List<PublishJobRead>, PublishJobRead>(rawData, 'List<PublishJobRead>', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<List<PublishJobRead>, PublishJobRead>(
+              rawData,
+              'List<PublishJobRead>',
+              growable: true,
+            );
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -98,11 +102,11 @@ _responseData = rawData == null ? null : deserialize<List<PublishJobRead>, Publi
   }
 
   /// Publish Clip
-  /// 
+  ///
   ///
   /// Parameters:
-  /// * [clipId] 
-  /// * [publishRequest] 
+  /// * [clipId]
+  /// * [publishRequest]
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
   /// * [headers] - Can be used to add additional headers to the request
   /// * [extras] - Can be used to add flags to the request
@@ -112,7 +116,8 @@ _responseData = rawData == null ? null : deserialize<List<PublishJobRead>, Publi
   ///
   /// Returns a [Future] containing a [Response] with a [List<PublishJobRead>] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<List<PublishJobRead>>> publishClipApiV1ClipsClipIdPublishPost({ 
+  Future<Response<List<PublishJobRead>>>
+  publishClipApiV1ClipsClipIdPublishPost({
     required int clipId,
     required PublishRequest publishRequest,
     CancelToken? cancelToken,
@@ -122,19 +127,18 @@ _responseData = rawData == null ? null : deserialize<List<PublishJobRead>, Publi
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async {
-    final _path = r'/api/v1/clips/{clip_id}/publish'.replaceAll('{' r'clip_id' '}', clipId.toString());
+    final _path = r'/api/v1/clips/{clip_id}/publish'.replaceAll(
+      '{'
+      r'clip_id'
+      '}',
+      clipId.toString(),
+    );
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
+      headers: <String, dynamic>{...?headers},
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {
-            'type': 'http',
-            'scheme': 'bearer',
-            'name': 'HTTPBearer',
-          },
+          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
         ],
         ...?extra,
       },
@@ -145,13 +149,10 @@ _responseData = rawData == null ? null : deserialize<List<PublishJobRead>, Publi
     dynamic _bodyData;
 
     try {
-_bodyData=jsonEncode(publishRequest);
-    } catch(error, stackTrace) {
+      _bodyData = jsonEncode(publishRequest);
+    } catch (error, stackTrace) {
       throw DioException(
-         requestOptions: _options.compose(
-          _dio.options,
-          _path,
-        ),
+        requestOptions: _options.compose(_dio.options, _path),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -170,9 +171,14 @@ _bodyData=jsonEncode(publishRequest);
     List<PublishJobRead>? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<List<PublishJobRead>, PublishJobRead>(rawData, 'List<PublishJobRead>', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<List<PublishJobRead>, PublishJobRead>(
+              rawData,
+              'List<PublishJobRead>',
+              growable: true,
+            );
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -194,5 +200,4 @@ _responseData = rawData == null ? null : deserialize<List<PublishJobRead>, Publi
       extra: _response.extra,
     );
   }
-
 }

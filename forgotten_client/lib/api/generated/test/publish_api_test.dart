@@ -1,7 +1,6 @@
 import 'package:test/test.dart';
 import 'package:forgotten_client_api/forgotten_client_api.dart';
 
-
 /// tests for PublishApi
 void main() {
   final instance = ForgottenClientApi().getPublishApi();
@@ -20,6 +19,5 @@ void main() {
     test('test publishClipApiV1ClipsClipIdPublishPost', () async {
       // TODO
     });
-
   });
 }

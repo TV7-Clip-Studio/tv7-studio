@@ -8,7 +8,6 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'validation_error_loc_inner.g.dart';
 
-
 @CopyWith()
 @JsonSerializable(
   checked: true,
@@ -21,15 +20,15 @@ class ValidationErrorLocInner {
   ValidationErrorLocInner({this.dummy});
   final String? dummy;
 
-
-
   @override
-  bool operator ==(Object other) => identical(this, other) || other is ValidationErrorLocInner;
+  bool operator ==(Object other) =>
+      identical(this, other) || other is ValidationErrorLocInner;
 
   @override
   int get hashCode => runtimeType.hashCode;
 
-  factory ValidationErrorLocInner.fromJson(Map<String, dynamic> json) => _$ValidationErrorLocInnerFromJson(json);
+  factory ValidationErrorLocInner.fromJson(Map<String, dynamic> json) =>
+      _$ValidationErrorLocInnerFromJson(json);
 
   Map<String, dynamic> toJson() => _$ValidationErrorLocInnerToJson(this);
 
@@ -37,6 +36,4 @@ class ValidationErrorLocInner {
   String toString() {
     return toJson().toString();
   }
-
 }
-

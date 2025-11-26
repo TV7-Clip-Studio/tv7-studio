@@ -9,15 +9,13 @@ import 'dart:convert';
 import 'package:forgotten_client_api/src/deserialize.dart';
 import 'package:dio/dio.dart';
 
-
 class DefaultApi {
-
   final Dio _dio;
 
   const DefaultApi(this._dio);
 
   /// Health
-  /// 
+  ///
   ///
   /// Parameters:
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
@@ -29,7 +27,7 @@ class DefaultApi {
   ///
   /// Returns a [Future] containing a [Response] with a [Map<String, String>] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<Map<String, String>>> healthHealthGet({ 
+  Future<Response<Map<String, String>>> healthHealthGet({
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
     Map<String, dynamic>? extra,
@@ -40,13 +38,8 @@ class DefaultApi {
     final _path = r'/health';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
-      extra: <String, dynamic>{
-        'secure': <Map<String, String>>[],
-        ...?extra,
-      },
+      headers: <String, dynamic>{...?headers},
+      extra: <String, dynamic>{'secure': <Map<String, String>>[], ...?extra},
       validateStatus: validateStatus,
     );
 
@@ -61,9 +54,14 @@ class DefaultApi {
     Map<String, String>? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<Map<String, String>, String>(rawData, 'Map<String, String>', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<Map<String, String>, String>(
+              rawData,
+              'Map<String, String>',
+              growable: true,
+            );
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -99,7 +97,7 @@ _responseData = rawData == null ? null : deserialize<Map<String, String>, String
   ///
   /// Returns a [Future] containing a [Response] with a [Object] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<Object>> metricsMetricsGet({ 
+  Future<Response<Object>> metricsMetricsGet({
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
     Map<String, dynamic>? extra,
@@ -110,13 +108,8 @@ _responseData = rawData == null ? null : deserialize<Map<String, String>, String
     final _path = r'/metrics';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
-      extra: <String, dynamic>{
-        'secure': <Map<String, String>>[],
-        ...?extra,
-      },
+      headers: <String, dynamic>{...?headers},
+      extra: <String, dynamic>{'secure': <Map<String, String>>[], ...?extra},
       validateStatus: validateStatus,
     );
 
@@ -131,9 +124,10 @@ _responseData = rawData == null ? null : deserialize<Map<String, String>, String
     Object? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<Object, Object>(rawData, 'Object', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<Object, Object>(rawData, 'Object', growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -157,7 +151,7 @@ _responseData = rawData == null ? null : deserialize<Object, Object>(rawData, 'O
   }
 
   /// Readyz
-  /// 
+  ///
   ///
   /// Parameters:
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
@@ -169,7 +163,7 @@ _responseData = rawData == null ? null : deserialize<Object, Object>(rawData, 'O
   ///
   /// Returns a [Future] containing a [Response] with a [Map<String, String>] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<Map<String, String>>> readyzReadyzGet({ 
+  Future<Response<Map<String, String>>> readyzReadyzGet({
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
     Map<String, dynamic>? extra,
@@ -180,13 +174,8 @@ _responseData = rawData == null ? null : deserialize<Object, Object>(rawData, 'O
     final _path = r'/readyz';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
-      extra: <String, dynamic>{
-        'secure': <Map<String, String>>[],
-        ...?extra,
-      },
+      headers: <String, dynamic>{...?headers},
+      extra: <String, dynamic>{'secure': <Map<String, String>>[], ...?extra},
       validateStatus: validateStatus,
     );
 
@@ -201,9 +190,14 @@ _responseData = rawData == null ? null : deserialize<Object, Object>(rawData, 'O
     Map<String, String>? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<Map<String, String>, String>(rawData, 'Map<String, String>', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<Map<String, String>, String>(
+              rawData,
+              'Map<String, String>',
+              growable: true,
+            );
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -227,7 +221,7 @@ _responseData = rawData == null ? null : deserialize<Map<String, String>, String
   }
 
   /// Version
-  /// 
+  ///
   ///
   /// Parameters:
   /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
@@ -239,7 +233,7 @@ _responseData = rawData == null ? null : deserialize<Map<String, String>, String
   ///
   /// Returns a [Future] containing a [Response] with a [Map<String, String>] as data
   /// Throws [DioException] if API call or serialization fails
-  Future<Response<Map<String, String>>> versionVersionGet({ 
+  Future<Response<Map<String, String>>> versionVersionGet({
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
     Map<String, dynamic>? extra,
@@ -250,13 +244,8 @@ _responseData = rawData == null ? null : deserialize<Map<String, String>, String
     final _path = r'/version';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{
-        ...?headers,
-      },
-      extra: <String, dynamic>{
-        'secure': <Map<String, String>>[],
-        ...?extra,
-      },
+      headers: <String, dynamic>{...?headers},
+      extra: <String, dynamic>{'secure': <Map<String, String>>[], ...?extra},
       validateStatus: validateStatus,
     );
 
@@ -271,9 +260,14 @@ _responseData = rawData == null ? null : deserialize<Map<String, String>, String
     Map<String, String>? _responseData;
 
     try {
-final rawData = _response.data;
-_responseData = rawData == null ? null : deserialize<Map<String, String>, String>(rawData, 'Map<String, String>', growable: true);
-
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<Map<String, String>, String>(
+              rawData,
+              'Map<String, String>',
+              growable: true,
+            );
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -295,5 +289,4 @@ _responseData = rawData == null ? null : deserialize<Map<String, String>, String
       extra: _response.extra,
     );
   }
-
 }

@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 
 class UrlInputForm extends StatefulWidget {
-  const UrlInputForm({
-    super.key,
-    required this.onSubmit,
-    this.enabled = true,
-  });
+  const UrlInputForm({required this.onSubmit, super.key, this.enabled = true});
 
   final ValueChanged<String> onSubmit;
   final bool enabled;
@@ -57,7 +53,8 @@ class _UrlInputFormState extends State<UrlInputForm> {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a URL';
                     }
-                    if (!value.contains('youtube.com') && !value.contains('youtu.be')) {
+                    if (!value.contains('youtube.com') &&
+                        !value.contains('youtu.be')) {
                       return 'Please enter a valid YouTube URL';
                     }
                     return null;

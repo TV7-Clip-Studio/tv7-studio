@@ -8,7 +8,6 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'user_create.g.dart';
 
-
 @CopyWith()
 @JsonSerializable(
   checked: true,
@@ -19,65 +18,35 @@ part 'user_create.g.dart';
 class UserCreate {
   /// Returns a new [UserCreate] instance.
   UserCreate({
+    required this.email,
 
-    required  this.email,
+    required this.fullName,
 
-    required  this.fullName,
-
-    required  this.password,
+    required this.password,
   });
 
-  @JsonKey(
-    
-    name: r'email',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'email', required: true)
   final String email;
 
-
-
-  @JsonKey(
-    
-    name: r'full_name',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'full_name', required: true)
   final String fullName;
 
-
-
-  @JsonKey(
-    
-    name: r'password',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'password', required: true)
   final String password;
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UserCreate &&
+          other.email == email &&
+          other.fullName == fullName &&
+          other.password == password;
 
+  @override
+  int get hashCode => email.hashCode + fullName.hashCode + password.hashCode;
 
-
-
-    @override
-    bool operator ==(Object other) => identical(this, other) || other is UserCreate &&
-      other.email == email &&
-      other.fullName == fullName &&
-      other.password == password;
-
-    @override
-    int get hashCode =>
-        email.hashCode +
-        fullName.hashCode +
-        password.hashCode;
-
-  factory UserCreate.fromJson(Map<String, dynamic> json) => _$UserCreateFromJson(json);
+  factory UserCreate.fromJson(Map<String, dynamic> json) =>
+      _$UserCreateFromJson(json);
 
   Map<String, dynamic> toJson() => _$UserCreateToJson(this);
 
@@ -85,6 +54,4 @@ class UserCreate {
   String toString() {
     return toJson().toString();
   }
-
 }
-

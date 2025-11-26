@@ -17,24 +17,27 @@ class _StubAuthAdapter implements HttpClientAdapter {
     final path = options.path;
     if (path.contains('/api/v1/auth/login')) {
       return ResponseBody.fromString(
-        '{"access_token":"token123","refresh_token":"refresh123","token_type":"bearer"}',
+        '{"access_token":"token123","refresh_token":"refresh123",'
+        '"token_type":"bearer"}',
         200,
-        headers: {Headers.contentTypeHeader: [Headers.jsonContentType]},
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
       );
     }
     if (path.contains('/api/v1/auth/refresh')) {
       return ResponseBody.fromString(
-        '{"access_token":"newAccess","refresh_token":"newRefresh","token_type":"bearer"}',
+        '{"access_token":"newAccess","refresh_token":"newRefresh",'
+        '"token_type":"bearer"}',
         200,
-        headers: {Headers.contentTypeHeader: [Headers.jsonContentType]},
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
       );
     }
     throw DioException(
       requestOptions: options,
-      response: Response(
-        requestOptions: options,
-        statusCode: 404,
-      ),
+      response: Response(requestOptions: options, statusCode: 404),
       type: DioExceptionType.badResponse,
     );
   }
@@ -117,7 +120,7 @@ void main() {
         refreshToken: 'b',
         expiresAt: DateTime.now().add(const Duration(seconds: 1)),
       );
-      final noExpiry = AuthTokens(
+      const noExpiry = AuthTokens(
         accessToken: 'a',
         refreshToken: 'b',
         expiresAt: null,

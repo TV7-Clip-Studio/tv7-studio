@@ -3,7 +3,5 @@ import 'package:forgotten_client_api/forgotten_client_api.dart';
 
 // tests for ClipGenerationMode
 void main() {
-
-  group(ClipGenerationMode, () {
-  });
+  group(ClipGenerationMode, () {});
 }

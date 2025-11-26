@@ -8,7 +8,6 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'you_tube_ingest_request.g.dart';
 
-
 @CopyWith()
 @JsonSerializable(
   checked: true,
@@ -18,50 +17,26 @@ part 'you_tube_ingest_request.g.dart';
 )
 class YouTubeIngestRequest {
   /// Returns a new [YouTubeIngestRequest] instance.
-  YouTubeIngestRequest({
+  YouTubeIngestRequest({required this.youtubeUrl, this.appendClips = false});
 
-    required  this.youtubeUrl,
-
-     this.appendClips = false,
-  });
-
-  @JsonKey(
-    
-    name: r'youtube_url',
-    required: true,
-    
-  )
-
-
+  @JsonKey(name: r'youtube_url', required: true)
   final String youtubeUrl;
 
-
-
-  @JsonKey(
-    defaultValue: false,
-    name: r'append_clips',
-    required: false,
-    
-  )
-
-
+  @JsonKey(defaultValue: false, name: r'append_clips', required: false)
   final bool? appendClips;
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is YouTubeIngestRequest &&
+          other.youtubeUrl == youtubeUrl &&
+          other.appendClips == appendClips;
 
+  @override
+  int get hashCode => youtubeUrl.hashCode + appendClips.hashCode;
 
-
-
-    @override
-    bool operator ==(Object other) => identical(this, other) || other is YouTubeIngestRequest &&
-      other.youtubeUrl == youtubeUrl &&
-      other.appendClips == appendClips;
-
-    @override
-    int get hashCode =>
-        youtubeUrl.hashCode +
-        appendClips.hashCode;
-
-  factory YouTubeIngestRequest.fromJson(Map<String, dynamic> json) => _$YouTubeIngestRequestFromJson(json);
+  factory YouTubeIngestRequest.fromJson(Map<String, dynamic> json) =>
+      _$YouTubeIngestRequestFromJson(json);
 
   Map<String, dynamic> toJson() => _$YouTubeIngestRequestToJson(this);
 
@@ -69,6 +44,4 @@ class YouTubeIngestRequest {
   String toString() {
     return toJson().toString();
   }
-
 }
-

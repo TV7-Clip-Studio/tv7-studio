@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../data/local/media_service.dart';
-import 'file_picker_area.dart';
-import 'url_input_form.dart';
+import 'package:forgotten_client/data/local/media_service.dart';
+import 'package:forgotten_client/features/ingest/file_picker_area.dart';
+import 'package:forgotten_client/features/ingest/url_input_form.dart';
 
 class IngestPage extends StatefulWidget {
-  const IngestPage({super.key, required this.mediaService});
+  const IngestPage({required this.mediaService, super.key});
 
   final MediaService mediaService;
 
@@ -113,27 +113,24 @@ class _IngestPageState extends State<IngestPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ingest Video'),
-      ),
+      appBar: AppBar(title: const Text('Ingest Video')),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            UrlInputForm(
-              onSubmit: _handleUrlSubmit,
-              enabled: !_isProcessing,
-            ),
+            UrlInputForm(onSubmit: _handleUrlSubmit, enabled: !_isProcessing),
             const SizedBox(height: 24),
-            const Row(children: [
-              Expanded(child: Divider()),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text('OR'),
-              ),
-              Expanded(child: Divider()),
-            ]),
+            const Row(
+              children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text('OR'),
+                ),
+                Expanded(child: Divider()),
+              ],
+            ),
             const SizedBox(height: 24),
             FilePickerArea(
               onFileSelected: _handleFileSelected,
@@ -157,13 +154,18 @@ class _IngestPageState extends State<IngestPage> {
                 child: Text(
                   _statusMessage!,
                   style: TextStyle(
-                    color: _ingestedFile != null ? Colors.green[800] : Colors.red[800],
+                    color: _ingestedFile != null
+                        ? Colors.green[800]
+                        : Colors.red[800],
                   ),
                 ),
               ),
             if (_logs.isNotEmpty) ...[
               const SizedBox(height: 16),
-              const Text('Console Output:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                'Console Output:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
               Expanded(
                 child: Container(
