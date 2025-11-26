@@ -35,6 +35,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
   List<VideoItem> _videos = [];
+  Map<String, List<VideoItem>> _groupedVideos = {};
   bool _loading = true;
   String _search = '';
   final bool _autoPromptNextClip = true;
@@ -50,9 +51,19 @@ class _DashboardPageState extends State<DashboardPage> {
       _loading = true;
     });
     final videos = await widget.localVideoRepository.getVideos();
+
+    // Group videos
+    final grouped = <String, List<VideoItem>>{};
+    for (final video in videos) {
+      final key =
+          video.parentBasename ?? p.basenameWithoutExtension(video.file.path);
+      grouped.putIfAbsent(key, () => []).add(video);
+    }
+
     if (mounted) {
       setState(() {
         _videos = videos;
+        _groupedVideos = grouped;
         _loading = false;
       });
     }
@@ -127,9 +138,8 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildVideosView(BuildContext context) {
-    final filtered = _videos.where((v) {
-      final name = p.basename(v.file.path).toLowerCase();
-      return name.contains(_search.toLowerCase());
+    final filteredKeys = _groupedVideos.keys.where((key) {
+      return key.toLowerCase().contains(_search.toLowerCase());
     }).toList();
 
     final totalSizeMb = _videos.fold<double>(
@@ -149,10 +159,16 @@ class _DashboardPageState extends State<DashboardPage> {
                   const SizedBox(height: 16),
                   _buildSearchBar(context),
                   const SizedBox(height: 12),
-                  if (filtered.isEmpty)
+                  if (filteredKeys.isEmpty)
                     _buildEmptyState(context)
                   else
-                    ...filtered.map((v) => _buildVideoCard(context, v)),
+                    ...filteredKeys.map(
+                      (key) => _buildVideoGroupCard(
+                        context,
+                        key,
+                        _groupedVideos[key]!,
+                      ),
+                    ),
                   const SizedBox(height: 32),
                 ],
               ),
@@ -338,131 +354,193 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildVideoCard(BuildContext context, VideoItem item) {
-    final stat = item.file.statSync();
-    final name = item.title?.isNotEmpty ?? false
-        ? item.title!
-        : p.basename(item.file.path);
-    final sizeMb = (stat.size / (1024 * 1024)).toStringAsFixed(1);
-    final date = stat.modified.toString().split('.')[0];
+  Widget _buildVideoGroupCard(
+    BuildContext context,
+    String groupKey,
+    List<VideoItem> items,
+  ) {
+    // Identify source video (not a clip)
+    final sourceVideo = items.firstWhere(
+      (item) => !item.isClip,
+      orElse: () => items
+          .first, // Fallback if only clips exist (shouldn't happen ideally)
+    );
 
-    final details = [
-      '$sizeMb MB',
-      date,
-      if (item.duration != null) item.duration,
-      if (item.resolution != null) item.resolution,
-    ].join(' • ');
+    final clips = items.where((item) => item.isClip).toList()
+      // Sort clips by creation time (newest first)
+      ..sort((a, b) {
+        final aModified = a.file.statSync().modified;
+        final bModified = b.file.statSync().modified;
+        return bModified.compareTo(aModified);
+      });
 
-    return Container(
+    return Card(
+      elevation: 0,
+      color: Theme.of(
+        context,
+      ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        leading: item.thumbnailPath != null
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(
-                  File(item.thumbnailPath!),
-                  width: 90,
-                  height: 54,
-                  fit: BoxFit.cover,
-                ),
-              )
-            : Container(
-                width: 90,
-                height: 54,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.video_file_outlined,
-                  color: Colors.grey,
-                ),
-              ),
-        title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(details),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              tooltip: 'Open',
-              icon: const Icon(Icons.play_circle_outline),
-              onPressed: () {
-                Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (context) => VideoPlayerPage(
-                      videoPath: item.file.path,
-                      repository: widget.localVideoRepository,
-                    ),
-                  ),
-                );
-              },
-            ),
-            IconButton(
-              tooltip: 'Create clip from list',
-              icon: const Icon(Icons.content_cut_outlined),
-              onPressed: () async {
-                const start = Duration.zero;
-                final end = Duration(
-                  seconds: item.duration != null
-                      ? int.tryParse(item.duration!.split(':').first) ?? 30
-                      : 30,
-                );
-                await _createAndUploadClip(
-                  videoPath: item.file.path,
-                  start: start,
-                  end: end,
-                  hook:
-                      'New clip from '
-                      '${p.basenameWithoutExtension(item.file.path)}',
-                );
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.cloud_upload_outlined),
-              tooltip: 'Sync to Backend',
-              onPressed: () async {
-                try {
-                  await widget.localVideoRepository.syncVideo(item);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Video synced successfully'),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text('Sync failed: $e')));
-                  }
-                }
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _deleteVideo(item.file.path),
-            ),
-          ],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ExpansionTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        collapsedShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
         ),
-        onTap: () {
-          Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (context) => VideoPlayerPage(
-                videoPath: item.file.path,
-                repository: widget.localVideoRepository,
+        leading: _buildThumbnail(sourceVideo),
+        title: Text(
+          sourceVideo.title ?? p.basename(sourceVideo.file.path),
+          style: const TextStyle(fontWeight: FontWeight.bold),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          '${clips.length} clips • '
+          '${sourceVideo.duration ?? "Unknown duration"}',
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          // Source video actions
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (context) => VideoPlayerPage(
+                        videoPath: sourceVideo.file.path,
+                        repository: widget.localVideoRepository,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Play Source'),
               ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () async {
+                  const start = Duration.zero;
+                  final end = _parseDurationLabel(sourceVideo.duration);
+                  await _createAndUploadClip(
+                    videoPath: sourceVideo.file.path,
+                    start: start,
+                    end: end,
+                    hook:
+                        'New clip from '
+                        '${p.basenameWithoutExtension(sourceVideo.file.path)}',
+                  );
+                },
+                icon: const Icon(Icons.content_cut),
+                label: const Text('Quick Clip'),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () => _deleteVideo(sourceVideo.file.path),
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                label: const Text(
+                  'Delete Source',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
+          ),
+          const Divider(),
+          if (clips.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: Text(
+                'No clips created yet.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            )
+          else
+            ...clips.map((clip) => _buildClipRow(context, clip)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThumbnail(VideoItem item) {
+    return item.thumbnailPath != null
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.file(
+              File(item.thumbnailPath!),
+              width: 60,
+              height: 40,
+              fit: BoxFit.cover,
+            ),
+          )
+        : Container(
+            width: 60,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.video_file_outlined,
+              color: Colors.grey,
+              size: 20,
             ),
           );
-        },
+  }
+
+  Widget _buildClipRow(BuildContext context, VideoItem clip) {
+    final stat = clip.file.statSync();
+    final sizeMb = (stat.size / (1024 * 1024)).toStringAsFixed(1);
+    // Prefer the title; fallback to filename.
+    final name = clip.title ?? p.basename(clip.file.path);
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: _buildThumbnail(clip),
+      title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text('$sizeMb MB • ${clip.duration ?? "Unknown"}'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: 'Play Clip',
+            icon: const Icon(Icons.play_circle_outline),
+            onPressed: () {
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (context) => VideoPlayerPage(
+                    videoPath: clip.file.path,
+                    repository: widget.localVideoRepository,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.cloud_upload_outlined),
+            tooltip: 'Sync Clip to Backend',
+            onPressed: () async {
+              try {
+                await widget.localVideoRepository.syncVideo(clip);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Clip synced successfully')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Sync failed: $e')));
+                }
+              }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () => _deleteVideo(clip.file.path),
+          ),
+        ],
       ),
     );
   }
@@ -478,6 +556,39 @@ class _DashboardPageState extends State<DashboardPage> {
     final outputName =
         '${p.basenameWithoutExtension(videoPath)}_clip_$timestamp.mp4';
     final outputPath = p.join(p.dirname(videoPath), outputName);
+
+    // Prompt for title
+    String? clipTitle;
+    if (mounted) {
+      clipTitle = await showDialog<String>(
+        context: context,
+        builder: (context) {
+          var value = hook;
+          return AlertDialog(
+            title: const Text('Name your clip'),
+            content: TextField(
+              autofocus: true,
+              decoration: const InputDecoration(hintText: 'Enter clip title'),
+              controller: TextEditingController(text: value),
+              onChanged: (v) => value = v,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, value),
+                child: const Text('Create'),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    if (clipTitle == null) return; // User cancelled
+
     try {
       await toolRunner.renderClip(
         videoPath,
@@ -485,20 +596,26 @@ class _DashboardPageState extends State<DashboardPage> {
         end.inMilliseconds / 1000.0,
         outputPath,
       );
-      final assetUrl = await widget.localVideoRepository.uploadAsset(
-        File(outputPath),
-      );
+
+      // Write meta so the title persists until a backend sync happens.
+      final metaFile = File('$outputPath.meta.json');
+      await metaFile.writeAsString('{"title": "$clipTitle"}');
+
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Clip uploaded! URL: $assetUrl')));
+      ).showSnackBar(const SnackBar(content: Text('Clip created!')));
+
+      // Reload to show the new clip
+      await _loadVideos();
+
       if (_autoPromptNextClip && mounted) {
         final again = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Create another clip?'),
             content: const Text(
-              'Clip uploaded successfully. Want to queue another one?',
+              'Clip created successfully. Want to queue another one?',
             ),
             actions: [
               TextButton(
@@ -527,8 +644,29 @@ class _DashboardPageState extends State<DashboardPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Clip upload failed: $e')));
+      ).showSnackBar(SnackBar(content: Text('Clip creation failed: $e')));
     }
+  }
+
+  Duration _parseDurationLabel(String? label) {
+    if (label == null || label.isEmpty) {
+      return const Duration(seconds: 30);
+    }
+
+    final parts = label.split(':').map(int.tryParse).toList();
+    if (parts.length == 3 &&
+        parts[0] != null &&
+        parts[1] != null &&
+        parts[2] != null) {
+      return Duration(hours: parts[0]!, minutes: parts[1]!, seconds: parts[2]!);
+    }
+
+    if (parts.length == 2 && parts[0] != null && parts[1] != null) {
+      return Duration(minutes: parts[0]!, seconds: parts[1]!);
+    }
+
+    final seconds = int.tryParse(label);
+    return Duration(seconds: seconds ?? 30);
   }
 
   Widget _chip(BuildContext context, IconData icon, String label) {

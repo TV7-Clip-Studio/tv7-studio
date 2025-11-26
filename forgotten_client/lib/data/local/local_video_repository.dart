@@ -19,6 +19,8 @@ class VideoItem {
     this.sourceUrl,
     this.backendId,
     this.title,
+    this.isClip = false,
+    this.parentBasename,
   });
   final File file;
   final String? thumbnailPath;
@@ -27,6 +29,8 @@ class VideoItem {
   final String? sourceUrl;
   final int? backendId;
   final String? title;
+  final bool isClip;
+  final String? parentBasename;
 }
 
 class SuggestedClip {
@@ -505,6 +509,16 @@ class ClientVideoRepository {
       } catch (_) {}
     }
 
+    final isClip = file.path.contains('_clip_');
+    String? parentBasename;
+    if (isClip) {
+      final name = p.basenameWithoutExtension(file.path);
+      final index = name.indexOf('_clip_');
+      if (index != -1) {
+        parentBasename = name.substring(0, index);
+      }
+    }
+
     return VideoItem(
       file: file,
       thumbnailPath: await thumbFile.exists() ? thumbFile.path : null,
@@ -513,6 +527,8 @@ class ClientVideoRepository {
       sourceUrl: sourceUrl,
       backendId: backendId,
       title: title,
+      isClip: isClip,
+      parentBasename: parentBasename,
     );
   }
 
