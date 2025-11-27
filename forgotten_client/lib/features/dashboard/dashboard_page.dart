@@ -1,3 +1,6 @@
+// ignore_for_file: avoid_slow_async_io
+
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,10 +9,11 @@ import 'package:forgotten_client/data/config/config_repository.dart';
 import 'package:forgotten_client/data/local/local_video_repository.dart';
 import 'package:forgotten_client/data/local/media_service.dart';
 import 'package:forgotten_client/data/local/tool_runner.dart';
+import 'package:forgotten_client/features/dashboard/clip_creation_dialog.dart';
 import 'package:forgotten_client/features/ingest/ingest_page.dart';
 import 'package:forgotten_client/features/player/video_player_page.dart';
 import 'package:forgotten_client/features/user/user_page.dart';
-import 'package:forgotten_client_api/forgotten_client_api.dart';
+import 'package:forgotten_client_api/forgotten_client_api.dart' hide ClipUpsert;
 import 'package:path/path.dart' as p;
 
 class DashboardPage extends StatefulWidget {
@@ -39,6 +43,10 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _loading = true;
   String _search = '';
   final bool _autoPromptNextClip = true;
+  bool _isAutoClipping = false;
+  String _autoClipStatus = '';
+  int _autoClipCompleted = 0;
+  int _autoClipTotal = 0;
 
   @override
   void initState() {
@@ -156,6 +164,29 @@ class _DashboardPageState extends State<DashboardPage> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   _buildHeader(context, totalSizeMb),
+                  if (_isAutoClipping)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Auto-creating clips '
+                              '($_autoClipCompleted/$_autoClipTotal) — '
+                              '$_autoClipStatus',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   const SizedBox(height: 16),
                   _buildSearchBar(context),
                   const SizedBox(height: 12),
@@ -420,16 +451,7 @@ class _DashboardPageState extends State<DashboardPage> {
               const SizedBox(width: 8),
               TextButton.icon(
                 onPressed: () async {
-                  const start = Duration.zero;
-                  final end = _parseDurationLabel(sourceVideo.duration);
-                  await _createAndUploadClip(
-                    videoPath: sourceVideo.file.path,
-                    start: start,
-                    end: end,
-                    hook:
-                        'New clip from '
-                        '${p.basenameWithoutExtension(sourceVideo.file.path)}',
-                  );
+                  await _autoCreateClipsFromHighlights(sourceVideo);
                 },
                 icon: const Icon(Icons.content_cut),
                 label: const Text('Quick Clip'),
@@ -516,26 +538,7 @@ class _DashboardPageState extends State<DashboardPage> {
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.cloud_upload_outlined),
-            tooltip: 'Sync Clip to Backend',
-            onPressed: () async {
-              try {
-                await widget.localVideoRepository.syncVideo(clip);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Clip synced successfully')),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Sync failed: $e')));
-                }
-              }
-            },
-          ),
+          // Clips should not be synced as standalone videos; action removed.
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: () => _deleteVideo(clip.file.path),
@@ -545,11 +548,10 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  // ignore: unused_element
   Future<void> _createAndUploadClip({
     required String videoPath,
-    required Duration start,
-    required Duration end,
-    required String hook,
+    required Duration totalDuration,
   }) async {
     final toolRunner = widget.localVideoRepository.runner;
     final timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -557,37 +559,21 @@ class _DashboardPageState extends State<DashboardPage> {
         '${p.basenameWithoutExtension(videoPath)}_clip_$timestamp.mp4';
     final outputPath = p.join(p.dirname(videoPath), outputName);
 
-    // Prompt for title
-    String? clipTitle;
+    // Prompt for clip details
+    Map<String, dynamic>? result;
     if (mounted) {
-      clipTitle = await showDialog<String>(
+      result = await showDialog<Map<String, dynamic>>(
         context: context,
-        builder: (context) {
-          var value = hook;
-          return AlertDialog(
-            title: const Text('Name your clip'),
-            content: TextField(
-              autofocus: true,
-              decoration: const InputDecoration(hintText: 'Enter clip title'),
-              controller: TextEditingController(text: value),
-              onChanged: (v) => value = v,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, value),
-                child: const Text('Create'),
-              ),
-            ],
-          );
-        },
+        builder: (context) => ClipCreationDialog(totalDuration: totalDuration),
       );
     }
 
-    if (clipTitle == null) return; // User cancelled
+    if (result == null) return; // User cancelled
+
+    final clipTitle = result['title'] as String;
+    final start = result['start'] as Duration;
+    final duration = result['duration'] as Duration;
+    final end = start + duration;
 
     try {
       await toolRunner.renderClip(
@@ -597,7 +583,7 @@ class _DashboardPageState extends State<DashboardPage> {
         outputPath,
       );
 
-      // Write meta so the title persists until a backend sync happens.
+      // Write metadata for the clip
       final metaFile = File('$outputPath.meta.json');
       await metaFile.writeAsString('{"title": "$clipTitle"}');
 
@@ -630,13 +616,10 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         );
         if ((again ?? false) && mounted) {
-          await Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (context) => VideoPlayerPage(
-                videoPath: videoPath,
-                repository: widget.localVideoRepository,
-              ),
-            ),
+          // Re-open dialog for the same video
+          await _createAndUploadClip(
+            videoPath: videoPath,
+            totalDuration: totalDuration,
           );
         }
       }
@@ -648,25 +631,232 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  Duration _parseDurationLabel(String? label) {
-    if (label == null || label.isEmpty) {
-      return const Duration(seconds: 30);
-    }
+  Future<TranscriptResult?> _ensureTranscript(VideoItem sourceVideo) async {
+    var transcript = await widget.localVideoRepository.getTranscript(
+      sourceVideo.file.path,
+    );
+    if (transcript != null) return transcript;
 
-    final parts = label.split(':').map(int.tryParse).toList();
+    try {
+      await widget.localVideoRepository.downloadTranscript(
+        sourceVideo.file.path,
+      );
+      transcript = await widget.localVideoRepository.getTranscript(
+        sourceVideo.file.path,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Transcript download failed: $e')),
+        );
+      }
+    }
+    return transcript;
+  }
+
+  int _durationSeconds(String? durationLabel) {
+    if (durationLabel == null || durationLabel.isEmpty) return 0;
+    final parts = durationLabel.split(':').map(int.tryParse).toList();
     if (parts.length == 3 &&
         parts[0] != null &&
         parts[1] != null &&
         parts[2] != null) {
-      return Duration(hours: parts[0]!, minutes: parts[1]!, seconds: parts[2]!);
+      return parts[0]! * 3600 + parts[1]! * 60 + parts[2]!;
     }
-
     if (parts.length == 2 && parts[0] != null && parts[1] != null) {
-      return Duration(minutes: parts[0]!, seconds: parts[1]!);
+      return parts[0]! * 60 + parts[1]!;
     }
+    return int.tryParse(durationLabel) ?? 0;
+  }
 
-    final seconds = int.tryParse(label);
-    return Duration(seconds: seconds ?? 30);
+  Future<void> _autoCreateClipsFromHighlights(VideoItem sourceVideo) async {
+    if (_isAutoClipping) return;
+
+    setState(() {
+      _isAutoClipping = true;
+      _autoClipStatus = 'Ensuring transcript...';
+      _autoClipCompleted = 0;
+      _autoClipTotal = 0;
+    });
+
+    try {
+      final transcript = await _ensureTranscript(sourceVideo);
+      if (transcript == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No transcript available for highlights'),
+            ),
+          );
+        }
+        return;
+      }
+
+      final durationSeconds = _durationSeconds(
+        sourceVideo.duration,
+      ).clamp(1, 24 * 3600);
+
+      var effectiveDuration = durationSeconds;
+      if (effectiveDuration <= 1) {
+        final probed = await widget.localVideoRepository.probeDurationSeconds(
+          sourceVideo.file.path,
+        );
+        if (probed != null && probed > 0) {
+          effectiveDuration = probed;
+        }
+      }
+      if (effectiveDuration <= 1) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Unable to determine video duration for highlights',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _autoClipStatus = 'Requesting highlights...';
+      });
+
+      HighlightResponse highlightResult;
+      try {
+        highlightResult = await widget.localVideoRepository.detectHighlights(
+          transcript.text,
+          effectiveDuration,
+          transcriptLanguage: transcript.languageCode,
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Highlights failed: $e')));
+        }
+        return;
+      }
+
+      final clips = highlightResult.clips;
+      final cappedClips = highlightResult.maxClips != null
+          ? clips.take(highlightResult.maxClips!).toList()
+          : clips;
+
+      if (cappedClips.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Highlights unavailable; no clips created'),
+            ),
+          );
+        }
+        return;
+      }
+
+      final video = await widget.localVideoRepository.syncVideo(sourceVideo);
+      final videoId = video.id;
+
+      _autoClipTotal = cappedClips.length;
+      var successCount = 0;
+
+      for (var i = 0; i < cappedClips.length; i++) {
+        final clip = cappedClips[i];
+        setState(() {
+          _autoClipStatus =
+              'Rendering clip ${i + 1} (${clip.startSec}-${clip.endSec}s)';
+        });
+        try {
+          await _renderUploadAndCreateClip(
+            sourceVideo: sourceVideo,
+            suggestion: clip,
+            videoId: videoId,
+          );
+          successCount++;
+        } catch (e) {
+          debugPrint('Auto clip ${i + 1} failed: $e');
+        }
+        setState(() {
+          _autoClipCompleted = i + 1;
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Auto clips created: $successCount/${clips.length}'),
+          ),
+        );
+        await _loadVideos();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAutoClipping = false;
+          _autoClipStatus = '';
+          _autoClipCompleted = 0;
+          _autoClipTotal = 0;
+        });
+      }
+    }
+  }
+
+  Future<void> _renderUploadAndCreateClip({
+    required VideoItem sourceVideo,
+    required SuggestedClip suggestion,
+    required int videoId,
+  }) async {
+    final toolRunner = widget.localVideoRepository.runner;
+    final outputBase =
+        '${p.basenameWithoutExtension(sourceVideo.file.path)}_'
+        '${suggestion.startSec}_${suggestion.endSec}_'
+        '${DateTime.now().millisecondsSinceEpoch}';
+    final outputPath = p.join(
+      p.dirname(sourceVideo.file.path),
+      '$outputBase.mp4',
+    );
+    final thumbPath = '$outputPath.jpg';
+
+    await toolRunner.renderClip(
+      sourceVideo.file.path,
+      suggestion.startSec.toDouble(),
+      suggestion.endSec.toDouble(),
+      outputPath,
+    );
+    await toolRunner.generateThumbnail(outputPath, thumbPath);
+
+    final outputFile = File(outputPath);
+    final thumbFile = File(thumbPath);
+    final assetUrl = await widget.localVideoRepository.uploadAsset(outputFile);
+    final thumbUrl = await widget.localVideoRepository.uploadAsset(thumbFile);
+
+    final stat = await outputFile.stat();
+    final clipDuration = Duration(
+      seconds: suggestion.endSec - suggestion.startSec,
+    );
+
+    final clip = ClipUpsert(
+      startSec: suggestion.startSec,
+      endSec: suggestion.endSec,
+      assetUrl: assetUrl,
+      thumbnailPath: thumbUrl,
+      captionText: suggestion.hook,
+      fileSizeBytes: stat.size,
+    );
+
+    await widget.localVideoRepository.createClipForVideo(videoId, clip);
+
+    final metaFile = File('$outputPath.meta.json');
+    final parentBase = p.basenameWithoutExtension(sourceVideo.file.path);
+    final meta = {
+      'title': suggestion.hook,
+      'is_clip': true,
+      'parent_basename': parentBase,
+      'duration':
+          '${clipDuration.inMinutes}:'
+          '${(clipDuration.inSeconds % 60).toString().padLeft(2, '0')}',
+    };
+    await metaFile.writeAsString(jsonEncode(meta));
   }
 
   Widget _chip(BuildContext context, IconData icon, String label) {

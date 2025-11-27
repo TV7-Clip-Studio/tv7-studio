@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:forgotten_client/config/app_config.dart';
 import 'package:forgotten_client/data/api/api_client.dart';
 import 'package:forgotten_client/data/auth/auth_repository.dart';
+import 'package:forgotten_client/data/auth/models.dart';
 import 'package:forgotten_client/data/auth/token_store.dart';
 import 'package:forgotten_client/data/config/config_repository.dart';
 import 'package:forgotten_client/data/local/local_video_repository.dart';
@@ -50,6 +51,8 @@ class _ShellState extends State<_Shell> {
   late final UploadsApi _uploadsApi;
   late final UsersApi _usersApi;
   bool _isAuthenticated = false;
+  bool _isRefreshing = false;
+  Future<AuthTokens?>? _refreshingFuture;
 
   @override
   void initState() {
@@ -71,6 +74,62 @@ class _ShellState extends State<_Shell> {
             options.headers['Authorization'] = 'Bearer ${tokens.accessToken}';
           }
           return handler.next(options);
+        },
+        onError: (error, handler) async {
+          final status = error.response?.statusCode;
+          if (status == 401) {
+            final tokens = await _tokenStore.read();
+            if (tokens == null) {
+              return handler.next(error);
+            }
+
+            try {
+              if (_isRefreshing && _refreshingFuture != null) {
+                final refreshed = await _refreshingFuture;
+                if (refreshed == null) {
+                  return handler.next(error);
+                }
+                final request = error.requestOptions;
+                request.headers['Authorization'] =
+                    'Bearer ${refreshed.accessToken}';
+                final clone = await _dio.fetch<dynamic>(request);
+                return handler.resolve(clone);
+              }
+
+              _isRefreshing = true;
+              _refreshingFuture = _authRepository.refresh(tokens);
+              final refreshed = await _refreshingFuture;
+              _refreshingFuture = null;
+              _isRefreshing = false;
+
+              if (refreshed == null) {
+                await _tokenStore.clear();
+                if (mounted) {
+                  setState(() {
+                    _isAuthenticated = false;
+                  });
+                }
+                return handler.next(error);
+              }
+
+              final request = error.requestOptions;
+              request.headers['Authorization'] =
+                  'Bearer ${refreshed.accessToken}';
+              final clone = await _dio.fetch<dynamic>(request);
+              return handler.resolve(clone);
+            } catch (_) {
+              _isRefreshing = false;
+              _refreshingFuture = null;
+              await _tokenStore.clear();
+              if (mounted) {
+                setState(() {
+                  _isAuthenticated = false;
+                });
+              }
+              return handler.next(error);
+            }
+          }
+          return handler.next(error);
         },
       ),
     );
