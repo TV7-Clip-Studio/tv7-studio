@@ -52,6 +52,20 @@ class SuggestedClip {
   final String hook;
 }
 
+class HighlightResponse {
+  HighlightResponse({required this.clips, this.maxClips});
+
+  factory HighlightResponse.fromJson(Map<String, dynamic> json) {
+    final clips = (json['clips'] as List<dynamic>? ?? [])
+        .map((e) => SuggestedClip.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return HighlightResponse(clips: clips, maxClips: json['max_clips'] as int?);
+  }
+
+  final List<SuggestedClip> clips;
+  final int? maxClips;
+}
+
 class TranscriptResult {
   TranscriptResult({required this.text, this.languageCode});
   final String text;
@@ -205,7 +219,8 @@ class ClientVideoRepository {
 
     for (final file in candidates) {
       try {
-        final text = await file.readAsString();
+        final raw = await file.readAsString();
+        final text = _normalizeTranscript(raw, file.path);
         final language = _inferLanguageCode(file.path);
         return TranscriptResult(text: text, languageCode: language);
       } catch (_) {}
@@ -213,7 +228,30 @@ class ClientVideoRepository {
     return null;
   }
 
-  Future<List<SuggestedClip>> detectHighlights(
+  String _absoluteUrl(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri != null && uri.hasScheme) return url;
+    final base = Uri.parse(dio.options.baseUrl);
+    return base.resolve(url.startsWith('/') ? url : '/$url').toString();
+  }
+
+  String _normalizeTranscript(String raw, String path) {
+    final lower = path.toLowerCase();
+    if (!lower.endsWith('.vtt')) return raw;
+
+    final buffer = StringBuffer();
+    for (final line in raw.split('\n')) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      if (trimmed.toUpperCase() == 'WEBVTT') continue;
+      if (trimmed.contains('-->')) continue;
+      if (int.tryParse(trimmed) != null) continue;
+      buffer.write('$trimmed ');
+    }
+    return buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  Future<HighlightResponse> detectHighlights(
     String transcript,
     int durationSeconds, {
     String? transcriptLanguage,
@@ -234,10 +272,11 @@ class ClientVideoRepository {
         if (data == null) {
           throw Exception('Highlight detection returned empty payload');
         }
-        final clips = (data['clips'] as List<dynamic>)
-            .map((e) => SuggestedClip.fromJson(e as Map<String, dynamic>))
-            .toList();
-        return clips;
+        return HighlightResponse.fromJson(data);
+      }
+      if (response.statusCode == 422) {
+        final detail = response.data;
+        throw Exception('Highlights validation failed: $detail');
       }
       throw Exception('Failed to detect highlights: ${response.statusCode}');
     } catch (e, stackTrace) {
@@ -280,10 +319,18 @@ class ClientVideoRepository {
       throw Exception('Upload failed: No data returned');
     }
 
-    return response.data!.assetUrl;
+    final url = _absoluteUrl(response.data!.assetUrl);
+    developer.log('Uploaded asset', error: {'path': file.path, 'url': url});
+    return url;
   }
 
   Future<api.VideoRead> syncVideo(VideoItem item) async {
+    if (item.isClip) {
+      developer.log('Skipping sync for clip item', error: item.file.path);
+      return Future.error(
+        Exception('Cannot sync a clip as a video. Use clip APIs instead.'),
+      );
+    }
     final metaFile = File('${item.file.path}.meta.json');
     Map<String, dynamic>? meta;
 
@@ -393,9 +440,15 @@ class ClientVideoRepository {
 
   Future<void> createClipForVideo(int videoId, ClipUpsert clip) async {
     try {
-      await dio.post<void>(
+      final payload = clip.toJson();
+      developer.log('Creating clip for video $videoId', error: payload);
+      final response = await dio.post<Map<String, dynamic>>(
         '/api/v1/videos/$videoId/clips',
-        data: clip.toJson(),
+        data: payload,
+      );
+      developer.log(
+        'Created clip response',
+        error: {'status': response.statusCode, 'data': response.data},
       );
     } catch (e, stackTrace) {
       developer.log(
@@ -432,12 +485,40 @@ class ClientVideoRepository {
     return null;
   }
 
+  Future<int?> probeDurationSeconds(String path) async {
+    // Try meta first
+    final metaFile = File('$path.meta.json');
+    if (await metaFile.exists()) {
+      try {
+        final meta =
+            jsonDecode(await metaFile.readAsString()) as Map<String, dynamic>;
+        final duration = meta['duration'] as String?;
+        final parsed = _parseDuration(duration);
+        if (parsed != null && parsed > 0) return parsed;
+      } catch (_) {}
+    }
+
+    try {
+      final info = await runner.getMediaInfo(path);
+      final format = info['format'] as Map<String, dynamic>?;
+      final formatDuration = format?['duration'];
+      if (formatDuration != null) {
+        final seconds = double.tryParse(formatDuration.toString());
+        if (seconds != null && seconds > 0) return seconds.round();
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<VideoItem> _enrichVideo(File file) async {
     final metaFile = File('${file.path}.meta.json');
     final thumbFile = File('${file.path}.thumb.jpg');
 
     Map<String, dynamic>? meta;
     String? title;
+    bool? isClipMeta;
+    String? parentBasenameMeta;
+    String? durationFromMeta;
 
     // 1. Metadata
     if (await metaFile.exists()) {
@@ -446,6 +527,9 @@ class ClientVideoRepository {
             jsonDecode(await metaFile.readAsString()) as Map<String, dynamic>;
         meta = parsedMeta;
         title = parsedMeta['title'] as String?;
+        isClipMeta = parsedMeta['is_clip'] as bool?;
+        parentBasenameMeta = parsedMeta['parent_basename'] as String?;
+        durationFromMeta = parsedMeta['duration'] as String?;
       } catch (_) {}
     }
 
@@ -470,7 +554,7 @@ class ClientVideoRepository {
       }
     }
 
-    String? duration;
+    var duration = durationFromMeta;
     String? resolution;
     String? sourceUrl;
     int? backendId;
@@ -509,9 +593,9 @@ class ClientVideoRepository {
       } catch (_) {}
     }
 
-    final isClip = file.path.contains('_clip_');
-    String? parentBasename;
-    if (isClip) {
+    final isClip = isClipMeta ?? file.path.contains('_clip_');
+    var parentBasename = parentBasenameMeta;
+    if (parentBasename == null && isClip) {
       final name = p.basenameWithoutExtension(file.path);
       final index = name.indexOf('_clip_');
       if (index != -1) {

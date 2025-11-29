@@ -98,7 +98,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         await Future<void>.delayed(const Duration(seconds: 1));
       }
 
-      final clips = await widget.repository.detectHighlights(
+      final highlightResponse = await widget.repository.detectHighlights(
         transcript.text,
         player.state.duration.inSeconds,
         transcriptLanguage: transcriptLanguage,
@@ -106,8 +106,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
       if (mounted) {
         setState(() {
-          _suggestedClips = clips;
-          if (clips.isNotEmpty) {
+          _suggestedClips = highlightResponse.clips;
+          if (_suggestedClips.isNotEmpty) {
             _selectClip(0);
           }
         });
