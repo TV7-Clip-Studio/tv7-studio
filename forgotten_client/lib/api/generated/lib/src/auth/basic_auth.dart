@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -18,14 +19,16 @@ class BasicAuthInterceptor extends AuthInterceptor {
   final Map<String, BasicAuthInfo> authInfo = {};
 
   @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+  void onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) {
     final metadataAuthInfo = getAuthInfo(
-      options,
-      (secure) =>
-          (secure['type'] == 'http' &&
-              secure['scheme']?.toLowerCase() == 'basic') ||
-          secure['type'] == 'basic',
-    );
+        options,
+        (secure) =>
+            (secure['type'] == 'http' &&
+                secure['scheme']?.toLowerCase() == 'basic') ||
+            secure['type'] == 'basic');
     for (final info in metadataAuthInfo) {
       final authName = info['name'] as String;
       final basicAuthInfo = authInfo[authName];

@@ -8,7 +8,7 @@ import 'package:forgotten_client_api/api.dart';
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**loc** | [**List&lt;ValidationErrorLocInner&gt;**](ValidationErrorLocInner.md) |  | 
+**loc** | **List&lt;String&gt;** | Location entries flattened to strings for client SDK compatibility. | 
 **msg** | **String** |  | 
 **type** | **String** |  | 
 

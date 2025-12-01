@@ -9,11 +9,96 @@ All URIs are relative to *http://localhost*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
+[**createClipForVideoApiV1VideosVideoIdClipsPost**](VideosApi.md#createclipforvideoapiv1videosvideoidclipspost) | **POST** /api/v1/videos/{video_id}/clips | Create Clip For Video
+[**deleteVideoApiV1VideosVideoIdDelete**](VideosApi.md#deletevideoapiv1videosvideoiddelete) | **DELETE** /api/v1/videos/{video_id} | Delete Video
 [**getVideoStatusApiV1VideosVideoIdGet**](VideosApi.md#getvideostatusapiv1videosvideoidget) | **GET** /api/v1/videos/{video_id} | Get Video Status
 [**ingestUploadEndpointApiV1VideosIngestUploadPost**](VideosApi.md#ingestuploadendpointapiv1videosingestuploadpost) | **POST** /api/v1/videos/ingest/upload | Ingest Upload Endpoint
 [**ingestYoutubeEndpointApiV1VideosIngestYoutubePost**](VideosApi.md#ingestyoutubeendpointapiv1videosingestyoutubepost) | **POST** /api/v1/videos/ingest/youtube | Ingest Youtube Endpoint
 [**registerLocalVideoApiV1VideosLocalPost**](VideosApi.md#registerlocalvideoapiv1videoslocalpost) | **POST** /api/v1/videos/local | Register Local Video
 
+
+# **createClipForVideoApiV1VideosVideoIdClipsPost**
+> ClipRead createClipForVideoApiV1VideosVideoIdClipsPost(videoId, clipUpsert)
+
+Create Clip For Video
+
+### Example
+```dart
+import 'package:forgotten_client_api/api.dart';
+
+final api = ForgottenClientApi().getVideosApi();
+final int videoId = 56; // int | 
+final ClipUpsert clipUpsert = ; // ClipUpsert | 
+
+try {
+    final response = api.createClipForVideoApiV1VideosVideoIdClipsPost(videoId, clipUpsert);
+    print(response);
+} catch on DioException (e) {
+    print('Exception when calling VideosApi->createClipForVideoApiV1VideosVideoIdClipsPost: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **videoId** | **int**|  | 
+ **clipUpsert** | [**ClipUpsert**](ClipUpsert.md)|  | 
+
+### Return type
+
+[**ClipRead**](ClipRead.md)
+
+### Authorization
+
+[HTTPBearer](../README.md#HTTPBearer)
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **deleteVideoApiV1VideosVideoIdDelete**
+> deleteVideoApiV1VideosVideoIdDelete(videoId)
+
+Delete Video
+
+### Example
+```dart
+import 'package:forgotten_client_api/api.dart';
+
+final api = ForgottenClientApi().getVideosApi();
+final int videoId = 56; // int | 
+
+try {
+    api.deleteVideoApiV1VideosVideoIdDelete(videoId);
+} catch on DioException (e) {
+    print('Exception when calling VideosApi->deleteVideoApiV1VideosVideoIdDelete: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **videoId** | **int**|  | 
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+[HTTPBearer](../README.md#HTTPBearer)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **getVideoStatusApiV1VideosVideoIdGet**
 > VideoRead getVideoStatusApiV1VideosVideoIdGet(videoId)

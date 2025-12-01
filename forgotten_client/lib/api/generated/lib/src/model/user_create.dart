@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -19,19 +20,29 @@ class UserCreate {
   /// Returns a new [UserCreate] instance.
   UserCreate({
     required this.email,
-
     required this.fullName,
-
     required this.password,
   });
 
-  @JsonKey(name: r'email', required: true)
+  @JsonKey(
+    name: r'email',
+    required: true,
+    includeIfNull: false,
+  )
   final String email;
 
-  @JsonKey(name: r'full_name', required: true)
+  @JsonKey(
+    name: r'full_name',
+    required: true,
+    includeIfNull: false,
+  )
   final String fullName;
 
-  @JsonKey(name: r'password', required: true)
+  @JsonKey(
+    name: r'password',
+    required: true,
+    includeIfNull: false,
+  )
   final String password;
 
   @override

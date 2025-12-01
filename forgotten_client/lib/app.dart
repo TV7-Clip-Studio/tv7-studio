@@ -50,6 +50,7 @@ class _ShellState extends State<_Shell> {
   late final VideosApi _videosApi;
   late final UploadsApi _uploadsApi;
   late final UsersApi _usersApi;
+  late final AiApi _aiApi;
   bool _isAuthenticated = false;
   bool _isRefreshing = false;
   Future<AuthTokens?>? _refreshingFuture;
@@ -143,10 +144,12 @@ class _ShellState extends State<_Shell> {
     _videosApi = VideosApi(_dio);
     _uploadsApi = UploadsApi(_dio);
     _usersApi = UsersApi(_dio);
+    _aiApi = AiApi(_dio);
     _localVideoRepository = ClientVideoRepository(
       toolRunner: ToolRunner(),
       videosApi: _videosApi,
       uploadsApi: _uploadsApi,
+      aiApi: _aiApi,
       dio: _dio,
     );
   }

@@ -1,10 +1,12 @@
 // ignore_for_file: avoid_slow_async_io
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:forgotten_client/data/local/local_video_repository.dart';
+import 'package:forgotten_client_api/forgotten_client_api.dart' as api;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
@@ -13,11 +15,13 @@ class VideoPlayerPage extends StatefulWidget {
   const VideoPlayerPage({
     required this.videoPath,
     required this.repository,
+    this.enableEditing = false,
     super.key,
   });
 
   final String videoPath;
   final ClientVideoRepository repository;
+  final bool enableEditing;
 
   @override
   State<VideoPlayerPage> createState() => _VideoPlayerPageState();
@@ -28,25 +32,72 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   late final VideoController controller;
   Duration? _start;
   Duration? _end;
+  Duration _playhead = Duration.zero;
+  Duration? _duration;
   int? _selectedClipIndex;
   final TextEditingController _hookController = TextEditingController();
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _startFieldController = TextEditingController();
+  final TextEditingController _endFieldController = TextEditingController();
   bool _isProcessing = false;
-  List<SuggestedClip> _suggestedClips = [];
+  List<api.SuggestedClip> _suggestedClips = [];
   bool _isDetecting = false;
+  StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<Duration>? _durationSub;
+  final Duration _snapStep = const Duration(seconds: 1);
+  final Duration _minClipLength = const Duration(seconds: 1);
 
   @override
   void initState() {
     super.initState();
     player = Player();
     controller = VideoController(player);
+    _listenToPlayerStreams();
     player.open(Media(widget.videoPath));
+    _primeLocalClips();
   }
 
   @override
   void dispose() {
+    _positionSub?.cancel();
+    _durationSub?.cancel();
     _hookController.dispose();
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _startFieldController.dispose();
+    _endFieldController.dispose();
     player.dispose();
     super.dispose();
+  }
+
+  void _listenToPlayerStreams() {
+    _positionSub = player.stream.position.listen((pos) {
+      if (!mounted) return;
+      setState(() {
+        _playhead = pos;
+      });
+    });
+    _durationSub = player.stream.duration.listen((dur) {
+      if (!mounted) return;
+      if (dur.inMilliseconds <= 0) return;
+      setState(() {
+        _duration = dur;
+      });
+    });
+  }
+
+  Future<void> _primeLocalClips() async {
+    final localClips = await widget.repository.loadLocalClipsForSource(
+      widget.videoPath,
+    );
+    if (!mounted) return;
+    setState(() {
+      _suggestedClips = localClips;
+      if (_suggestedClips.isNotEmpty) {
+        _selectClip(0);
+      }
+    });
   }
 
   Future<void> _detectHighlights() async {
@@ -92,15 +143,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         return;
       }
 
-      final duration = player.state.duration.inSeconds;
-      if (duration == 0) {
+      var durationSeconds = (_duration ?? player.state.duration).inSeconds;
+      if (durationSeconds == 0) {
         // Wait a bit for duration to be available if player just opened
         await Future<void>.delayed(const Duration(seconds: 1));
+        durationSeconds = (_duration ?? player.state.duration).inSeconds;
       }
 
       final highlightResponse = await widget.repository.detectHighlights(
         transcript.text,
-        player.state.duration.inSeconds,
+        durationSeconds,
         transcriptLanguage: transcriptLanguage,
       );
 
@@ -109,6 +161,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           _suggestedClips = highlightResponse.clips;
           if (_suggestedClips.isNotEmpty) {
             _selectClip(0);
+          } else {
+            _selectedClipIndex = null;
+            _start = null;
+            _end = null;
+            _startFieldController.clear();
+            _endFieldController.clear();
+            _hookController.clear();
+            _titleController.clear();
+            _descriptionController.clear();
           }
         });
       }
@@ -171,7 +232,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       final thumbUrl = await widget.repository.uploadAsset(File(thumbPath));
 
       // 5. Create Clip Entity
-      final clip = ClipUpsert(
+      final clip = api.ClipUpsert(
         startSec: _start!.inSeconds,
         endSec: _end!.inSeconds,
         assetUrl: assetUrl,
@@ -215,7 +276,37 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   String _formatDuration(Duration? d) {
     if (d == null) return '--:--';
-    return '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+    final totalSeconds = d.inSeconds;
+    final minutes = (totalSeconds ~/ 60).toString();
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  Duration? _parseDurationInput(String raw) {
+    final input = raw.trim();
+    if (input.isEmpty) return null;
+    final parts = input.split(':').map((p) => p.trim()).toList();
+    int seconds = 0;
+    if (parts.length == 1) {
+      final value = int.tryParse(parts[0]);
+      if (value == null) return null;
+      seconds = value;
+    } else if (parts.length == 2) {
+      final m = int.tryParse(parts[0]);
+      final s = int.tryParse(parts[1]);
+      if (m == null || s == null) return null;
+      seconds = m * 60 + s;
+    } else if (parts.length == 3) {
+      final h = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      final s = int.tryParse(parts[2]);
+      if (h == null || m == null || s == null) return null;
+      seconds = h * 3600 + m * 60 + s;
+    } else {
+      return null;
+    }
+    if (seconds < 0) seconds = 0;
+    return Duration(seconds: seconds);
   }
 
   void _selectClip(int index) {
@@ -225,15 +316,620 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       _start = Duration(seconds: clip.startSec);
       _end = Duration(seconds: clip.endSec);
       _hookController.text = clip.hook;
+      _titleController.text = clip.title;
+      _descriptionController.text = clip.description;
+      _startFieldController.text = _formatDuration(_start);
+      _endFieldController.text = _formatDuration(_end);
     });
     player.seek(Duration(seconds: clip.startSec));
+  }
+
+  Duration _snapDuration(Duration value) {
+    final step = _snapStep.inMilliseconds;
+    if (step <= 0) return value;
+    return Duration(milliseconds: (value.inMilliseconds / step).round() * step);
+  }
+
+  Duration _clampDuration(Duration value, Duration min, Duration max) {
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+  }
+
+  void _applyTimeFields() {
+    final idx = _selectedClipIndex;
+    if (idx == null) return;
+    final duration = _duration ?? player.state.duration;
+    if (duration.inMilliseconds <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Duration not available yet')),
+      );
+      return;
+    }
+    if (duration <= _minClipLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Video is too short for clip editing')),
+      );
+      return;
+    }
+    final start = _parseDurationInput(_startFieldController.text);
+    final end = _parseDurationInput(_endFieldController.text);
+    if (start == null || end == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Use mm:ss or seconds for start/end')),
+      );
+      return;
+    }
+    if (end <= start) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('End time must be after start time')),
+      );
+      return;
+    }
+    final clampedStart = _clampDuration(
+      _snapDuration(start),
+      Duration.zero,
+      duration - _minClipLength,
+    );
+    final clampedEnd = _clampDuration(
+      _snapDuration(end),
+      clampedStart + _minClipLength,
+      duration,
+    );
+    _updateSelectedClipBounds(clampedStart, clampedEnd);
+  }
+
+  void _updateSelectedClipBounds(Duration start, Duration end) {
+    final idx = _selectedClipIndex;
+    if (idx == null) return;
+    final clip = _suggestedClips[idx];
+    setState(() {
+      _start = start;
+      _end = end;
+      _suggestedClips[idx] = api.SuggestedClip(
+        startSec: start.inSeconds,
+        endSec: end.inSeconds,
+        title: clip.title,
+        description: clip.description,
+        hook: clip.hook,
+      );
+      _startFieldController.text = _formatDuration(_start);
+      _endFieldController.text = _formatDuration(_end);
+    });
+  }
+
+  void _adjustSelectedClip({
+    required double deltaPx,
+    required double trackWidth,
+    required Duration duration,
+    required bool isStartHandle,
+  }) {
+    if (duration <= _minClipLength) return;
+    final idx = _selectedClipIndex;
+    if (idx == null) return;
+    final clip = _suggestedClips[idx];
+    var currentStart = _start ?? Duration(seconds: clip.startSec);
+    var currentEnd = _end ?? Duration(seconds: clip.endSec);
+    if (trackWidth <= 0 || duration.inMilliseconds <= 0) return;
+
+    final deltaMs = (deltaPx / trackWidth * duration.inMilliseconds)
+        .round()
+        .toInt();
+    if (isStartHandle) {
+      currentStart += Duration(milliseconds: deltaMs);
+      currentStart = _snapDuration(
+        _clampDuration(currentStart, Duration.zero, duration - _minClipLength),
+      );
+      if (currentStart >= currentEnd) {
+        currentEnd = currentStart + _minClipLength;
+      }
+    } else {
+      currentEnd += Duration(milliseconds: deltaMs);
+      currentEnd = _snapDuration(
+        _clampDuration(currentEnd, currentStart + _minClipLength, duration),
+      );
+    }
+
+    currentStart = _clampDuration(
+      currentStart,
+      Duration.zero,
+      duration - _minClipLength,
+    );
+    currentEnd = _clampDuration(
+      currentEnd,
+      currentStart + _minClipLength,
+      duration,
+    );
+
+    _updateSelectedClipBounds(currentStart, currentEnd);
+  }
+
+  void _seekFromTrack(double dx, double width, Duration duration) {
+    if (width <= 0 || duration.inMilliseconds <= 0) return;
+    final ratio = (dx / width).clamp(0.0, 1.0);
+    final targetMs = (ratio * duration.inMilliseconds).round();
+    final target = Duration(milliseconds: targetMs);
+    player.seek(target);
+    setState(() {
+      _playhead = target;
+    });
+  }
+
+  Widget _buildTimelineCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final effectiveDuration =
+        _duration ??
+        (player.state.duration.inMilliseconds > 0
+            ? player.state.duration
+            : null);
+    final hasDuration =
+        effectiveDuration != null && effectiveDuration.inMilliseconds > 0;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colorScheme.outlineVariant),
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.timeline, color: colorScheme.primary),
+              const SizedBox(width: 8),
+              const Text('Timeline'),
+              const Spacer(),
+              if (hasDuration)
+                Text(
+                  '${_formatDuration(_playhead)} / ${_formatDuration(effectiveDuration)}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              const SizedBox(width: 8),
+              FilledButton.tonal(
+                onPressed: _isDetecting ? null : _detectHighlights,
+                child: const Text('Create new clips'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (!hasDuration)
+            Row(
+              children: [
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Loading video duration...',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            )
+          else
+            SizedBox(
+              height: 80,
+              child: _buildTimelineTrack(context, effectiveDuration),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineTrack(BuildContext context, Duration duration) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final playheadRatio =
+            (_playhead.inMilliseconds / duration.inMilliseconds).clamp(
+              0.0,
+              1.0,
+            );
+        final playheadX = playheadRatio * width;
+
+        final clipWidgets = <Widget>[];
+        for (var i = 0; i < _suggestedClips.length; i++) {
+          final clip = _suggestedClips[i];
+          final startMs = (clip.startSec * 1000).clamp(
+            0,
+            duration.inMilliseconds,
+          );
+          final endMs = (clip.endSec * 1000).clamp(0, duration.inMilliseconds);
+          if (endMs <= startMs) continue;
+          final startX = width * (startMs / duration.inMilliseconds);
+          final endX = width * (endMs / duration.inMilliseconds);
+          final spanWidth = (endX - startX).clamp(8.0, width).toDouble();
+          final selected = i == _selectedClipIndex;
+
+          clipWidgets.add(
+            Positioned(
+              left: startX,
+              width: spanWidth,
+              top: 20,
+              height: 22,
+              child: GestureDetector(
+                onTap: () => _selectClip(i),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    color: selected
+                        ? colorScheme.primary.withValues(alpha: 0.35)
+                        : colorScheme.secondary.withValues(alpha: 0.3),
+                    border: Border.all(
+                      color: selected
+                          ? colorScheme.primary
+                          : colorScheme.outline,
+                      width: selected ? 2 : 1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          if (selected) {
+            const handleWidth = 12.0;
+            clipWidgets.add(
+              Positioned(
+                left: (startX - handleWidth / 2).clamp(0.0, width).toDouble(),
+                top: 12,
+                width: handleWidth,
+                height: 38,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragUpdate: (details) => _adjustSelectedClip(
+                    deltaPx: details.delta.dx,
+                    trackWidth: width,
+                    duration: duration,
+                    isStartHandle: true,
+                  ),
+                ),
+              ),
+            );
+            clipWidgets.add(
+              Positioned(
+                left: (startX + spanWidth - handleWidth / 2)
+                    .clamp(0.0, width)
+                    .toDouble(),
+                top: 12,
+                width: handleWidth,
+                height: 38,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragUpdate: (details) => _adjustSelectedClip(
+                    deltaPx: details.delta.dx,
+                    trackWidth: width,
+                    duration: duration,
+                    isStartHandle: false,
+                  ),
+                ),
+              ),
+            );
+          }
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (details) =>
+              _seekFromTrack(details.localPosition.dx, width, duration),
+          onHorizontalDragUpdate: (details) =>
+              _seekFromTrack(details.localPosition.dx, width, duration),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                top: 26,
+                bottom: 26,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.6,
+                    ),
+                  ),
+                ),
+              ),
+              ...clipWidgets,
+              Positioned(
+                left: playheadX.clamp(0.0, width).toDouble(),
+                top: 0,
+                bottom: 0,
+                child: Container(width: 2, color: colorScheme.primary),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildClipEditorPanel() {
+    return Expanded(
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: _suggestedClips.length,
+              itemBuilder: (context, index) {
+                final clip = _suggestedClips[index];
+                final selected = index == _selectedClipIndex;
+                final start = _formatDuration(Duration(seconds: clip.startSec));
+                final end = _formatDuration(Duration(seconds: clip.endSec));
+                return ListTile(
+                  leading: const Icon(Icons.movie_creation_outlined),
+                  title: Text(
+                    clip.hook,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text('$start - $end'),
+                  selected: selected,
+                  selectedTileColor: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.08),
+                  onTap: () => _selectClip(index),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _startFieldController,
+                        decoration: const InputDecoration(
+                          labelText: 'Start (mm:ss or seconds)',
+                          border: OutlineInputBorder(),
+                        ),
+                        onEditingComplete: _applyTimeFields,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _endFieldController,
+                        decoration: const InputDecoration(
+                          labelText: 'End (mm:ss or seconds)',
+                          border: OutlineInputBorder(),
+                        ),
+                        onEditingComplete: _applyTimeFields,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    FilledButton.tonal(
+                      onPressed: _applyTimeFields,
+                      child: const Text('Apply times'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonal(
+                      onPressed: _start != null
+                          ? () => player.seek(_start!)
+                          : null,
+                      child: const Text('Seek start'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonal(
+                      onPressed: _end != null ? () => player.seek(_end!) : null,
+                      child: const Text('Seek end'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    FilledButton.tonal(
+                      onPressed: () {
+                        final duration = _duration ?? player.state.duration;
+                        if (duration.inMilliseconds <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Duration not available yet'),
+                            ),
+                          );
+                          return;
+                        }
+                        if (duration <= _minClipLength) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Video is too short for clip editing',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                        final current = player.state.position;
+                        final clamped = _clampDuration(
+                          _snapDuration(current),
+                          Duration.zero,
+                          duration - _minClipLength,
+                        );
+                        final desiredEnd = _end ?? clamped + _minClipLength;
+                        final clampedEnd = _clampDuration(
+                          desiredEnd,
+                          clamped + _minClipLength,
+                          duration,
+                        );
+                        _updateSelectedClipBounds(clamped, clampedEnd);
+                      },
+                      child: const Text('Set start to playhead'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonal(
+                      onPressed: () {
+                        final duration = _duration ?? player.state.duration;
+                        if (duration.inMilliseconds <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Duration not available yet'),
+                            ),
+                          );
+                          return;
+                        }
+                        if (duration <= _minClipLength) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Video is too short for clip editing',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                        final current = player.state.position;
+                        final clamped = _clampDuration(
+                          _snapDuration(current),
+                          Duration.zero,
+                          duration,
+                        );
+                        final startSafe = _start ?? Duration.zero;
+                        final endSafe = clamped <= startSafe
+                            ? startSafe + _minClipLength
+                            : clamped;
+                        _updateSelectedClipBounds(
+                          startSafe,
+                          _clampDuration(
+                            endSafe,
+                            startSafe + _minClipLength,
+                            duration,
+                          ),
+                        );
+                      },
+                      child: const Text('Set end to playhead'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Title',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _descriptionController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _hookController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Hook',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed:
+                      (_start != null &&
+                          _end != null &&
+                          _selectedClipIndex != null)
+                      ? () {
+                          final idx = _selectedClipIndex!;
+                          setState(() {
+                            _suggestedClips[idx] = api.SuggestedClip(
+                              startSec: _start!.inSeconds,
+                              endSec: _end!.inSeconds,
+                              title: _titleController.text.trim().isEmpty
+                                  ? _suggestedClips[idx].title
+                                  : _titleController.text.trim(),
+                              description:
+                                  _descriptionController.text.trim().isEmpty
+                                  ? _suggestedClips[idx].description
+                                  : _descriptionController.text.trim(),
+                              hook: _hookController.text.trim().isEmpty
+                                  ? _suggestedClips[idx].hook
+                                  : _hookController.text.trim(),
+                            );
+                          });
+                          _createClip();
+                        }
+                      : null,
+                  icon: const Icon(Icons.cloud_upload),
+                  label: const Text('Send Clip'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStandardLayout() {
+    return Column(
+      children: [
+        AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Video(controller: controller),
+        ),
+        Expanded(
+          child: _suggestedClips.isNotEmpty
+              ? _buildClipEditorPanel()
+              : const SizedBox.shrink(),
+        ),
+        if (_isProcessing)
+          const LinearProgressIndicator()
+        else
+          const SizedBox.shrink(),
+      ],
+    );
+  }
+
+  Widget _buildEditorLayout(BuildContext context) {
+    return Column(
+      children: [
+        AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Video(controller: controller),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildTimelineCard(context),
+                if (_suggestedClips.isNotEmpty)
+                  SizedBox(height: 380, child: _buildClipEditorPanel()),
+              ],
+            ),
+          ),
+        ),
+        if (_isProcessing)
+          const LinearProgressIndicator()
+        else
+          const SizedBox.shrink(),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Video Player'),
+        title: Text(widget.enableEditing ? 'Clip Editor' : 'Video Player'),
         actions: [
           if (_isDetecting)
             const Center(
@@ -254,116 +950,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(flex: 2, child: Video(controller: controller)),
-          if (_suggestedClips.isNotEmpty)
-            Expanded(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: _suggestedClips.length,
-                      itemBuilder: (context, index) {
-                        final clip = _suggestedClips[index];
-                        final selected = index == _selectedClipIndex;
-                        final start = _formatDuration(
-                          Duration(seconds: clip.startSec),
-                        );
-                        final end = _formatDuration(
-                          Duration(seconds: clip.endSec),
-                        );
-                        return ListTile(
-                          leading: const Icon(Icons.movie_creation_outlined),
-                          title: Text(
-                            clip.hook,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text('$start - $end'),
-                          selected: selected,
-                          selectedTileColor: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.08),
-                          onTap: () => _selectClip(index),
-                        );
-                      },
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextField(
-                          controller: _hookController,
-                          maxLines: 2,
-                          decoration: const InputDecoration(
-                            labelText: 'Edit hook text',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            FilledButton.tonal(
-                              onPressed: _start != null
-                                  ? () => setState(
-                                      () => _start = player.state.position,
-                                    )
-                                  : null,
-                              child: Text(
-                                'Set Start: ${_formatDuration(_start)}',
-                              ),
-                            ),
-                            FilledButton.tonal(
-                              onPressed: _end != null
-                                  ? () => setState(
-                                      () => _end = player.state.position,
-                                    )
-                                  : null,
-                              child: Text('Set End: ${_formatDuration(_end)}'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton.icon(
-                          onPressed:
-                              (_start != null &&
-                                  _end != null &&
-                                  _selectedClipIndex != null)
-                              ? () {
-                                  // Update selected clip hook before upload
-                                  final idx = _selectedClipIndex!;
-                                  _suggestedClips[idx] = SuggestedClip(
-                                    startSec: _start!.inSeconds,
-                                    endSec: _end!.inSeconds,
-                                    hook: _hookController.text.trim().isEmpty
-                                        ? _suggestedClips[idx].hook
-                                        : _hookController.text.trim(),
-                                  );
-                                  _createClip();
-                                }
-                              : null,
-                          icon: const Icon(Icons.cloud_upload),
-                          label: const Text('Send Clip'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (_isProcessing)
-            const LinearProgressIndicator()
-          else
-            const SizedBox.shrink(),
-        ],
-      ),
+      body: widget.enableEditing
+          ? _buildEditorLayout(context)
+          : _buildStandardLayout(),
     );
   }
 }

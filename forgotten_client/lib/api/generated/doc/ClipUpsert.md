@@ -8,19 +8,20 @@ import 'package:forgotten_client_api/api.dart';
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**startSec** | **int** |  | 
-**endSec** | **int** |  | 
-**localPath** | **String** |  | [optional] 
-**assetUrl** | **String** |  | [optional] 
 **assetChecksum** | **String** |  | [optional] 
 **assetSizeBytes** | **int** |  | [optional] 
-**readyLocalOnly** | **bool** |  | [optional] [default to false]
+**assetUrl** | **String** |  | [optional] 
 **captionText** | **String** |  | [optional] 
-**renderWidth** | **int** |  | [optional] 
-**renderHeight** | **int** |  | [optional] 
-**frameRate** | **num** |  | [optional] 
+**endSec** | **int** |  | 
 **fileSizeBytes** | **int** |  | [optional] 
+**frameRate** | **num** |  | [optional] 
+**localPath** | **String** |  | [optional] 
+**readyLocalOnly** | **bool** |  | [optional] [default to false]
+**renderHeight** | **int** |  | [optional] 
+**renderWidth** | **int** |  | [optional] 
+**startSec** | **int** |  | 
 **status** | [**ClipStatus**](ClipStatus.md) |  | [optional] [default to ClipStatus.ready]
+**thumbnailPath** | **String** |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

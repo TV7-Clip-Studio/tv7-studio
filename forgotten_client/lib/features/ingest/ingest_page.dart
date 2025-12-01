@@ -47,6 +47,7 @@ class _IngestPageState extends State<IngestPage> {
     });
 
     try {
+      await _checkDependencies();
       final file = await widget.mediaService.prepareIngestFromUrl(
         url,
         onLog: (line) {
@@ -54,6 +55,7 @@ class _IngestPageState extends State<IngestPage> {
             setState(() {
               _logs.add(line);
             });
+            debugPrint(line);
             _scrollToBottom();
           }
         },
@@ -88,6 +90,7 @@ class _IngestPageState extends State<IngestPage> {
     });
 
     try {
+      await _checkDependencies();
       final file = await widget.mediaService.prepareIngestFromFile(path);
       if (mounted) {
         setState(() {
@@ -110,11 +113,28 @@ class _IngestPageState extends State<IngestPage> {
     }
   }
 
+  Future<void> _checkDependencies() async {
+    final deps = ['yt-dlp', 'ffmpeg'];
+    final missing = <String>[];
+    for (final dep in deps) {
+      final exists = await Process.run('which', [dep]);
+      if (exists.exitCode != 0) {
+        missing.add(dep);
+      }
+    }
+    if (missing.isNotEmpty) {
+      throw Exception(
+        'Missing required tools: ${missing.join(', ')}. '
+        'Install via your package manager (e.g., brew install ffmpeg yt-dlp).',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Ingest Video')),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -167,27 +187,27 @@ class _IngestPageState extends State<IngestPage> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    itemCount: _logs.length,
-                    itemBuilder: (context, index) {
-                      return Text(
-                        _logs[index],
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontFamily: 'Courier',
-                          fontSize: 12,
-                        ),
-                      );
-                    },
-                  ),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                constraints: const BoxConstraints(maxHeight: 240),
+                child: ListView.builder(
+                  controller: _scrollController,
+                  shrinkWrap: true,
+                  itemCount: _logs.length,
+                  itemBuilder: (context, index) {
+                    return Text(
+                      _logs[index],
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontFamily: 'Courier',
+                        fontSize: 12,
+                      ),
+                    );
+                  },
                 ),
               ),
             ],

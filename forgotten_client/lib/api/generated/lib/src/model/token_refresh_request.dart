@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -17,9 +18,15 @@ part 'token_refresh_request.g.dart';
 )
 class TokenRefreshRequest {
   /// Returns a new [TokenRefreshRequest] instance.
-  TokenRefreshRequest({required this.refreshToken});
+  TokenRefreshRequest({
+    required this.refreshToken,
+  });
 
-  @JsonKey(name: r'refresh_token', required: true)
+  @JsonKey(
+    name: r'refresh_token',
+    required: true,
+    includeIfNull: false,
+  )
   final String refreshToken;
 
   @override

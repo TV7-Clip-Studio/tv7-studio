@@ -9,9 +9,9 @@ import 'package:forgotten_client_api/api.dart';
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **agentId** | **String** |  | [optional] [default to 'default']
+**context** | **Map&lt;String, Object&gt;** |  | [optional] 
 **input** | **String** |  | 
 **sessionId** | **String** |  | [optional] 
-**context** | **Map&lt;String, Object&gt;** |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

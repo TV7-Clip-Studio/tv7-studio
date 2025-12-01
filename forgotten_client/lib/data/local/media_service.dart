@@ -32,16 +32,34 @@ class MediaService {
 
     onLog?.call('Starting download...');
 
+    final collected = <String>[];
     final stream = toolRunner.runStream('yt-dlp', [
+      '--ignore-config',
+      '--no-progress',
+      '--no-cache-dir',
       '-f',
-      'bestvideo[height<=720]+bestaudio/best[height<=720]',
+      'bv*[height<=720]+ba/b[height<=720]/best',
       '-o',
       outputPath,
       url,
     ]);
 
-    await for (final line in stream) {
-      onLog?.call(line);
+    try {
+      await for (final line in stream) {
+        collected.add(line);
+        onLog?.call(line);
+      }
+    } on ProcessException catch (e) {
+      final tail = collected.length > 10
+          ? collected.sublist(collected.length - 10).join('\n')
+          : collected.join('\n');
+      // Preserve failure shape for callers/tests expecting ProcessException.
+      throw ProcessException(
+        e.executable,
+        e.arguments,
+        'yt-dlp failed (exit ${e.errorCode}): ${e.message}\n$tail',
+        e.errorCode,
+      );
     }
 
     // Find the actual file created (yt-dlp adds extension)

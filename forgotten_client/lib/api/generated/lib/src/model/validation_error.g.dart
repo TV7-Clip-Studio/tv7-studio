@@ -1,3 +1,4 @@
+// @dart=3.4
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'validation_error.dart';
@@ -7,7 +8,7 @@ part of 'validation_error.dart';
 // **************************************************************************
 
 abstract class _$ValidationErrorCWProxy {
-  ValidationError loc(List<ValidationErrorLocInner> loc);
+  ValidationError loc(List<String> loc);
 
   ValidationError msg(String msg);
 
@@ -20,9 +21,9 @@ abstract class _$ValidationErrorCWProxy {
   /// ValidationError(...).copyWith(id: 12, name: "My name")
   /// ````
   ValidationError call({
-    List<ValidationErrorLocInner> loc,
-    String msg,
-    String type,
+    List<String>? loc,
+    String? msg,
+    String? type,
   });
 }
 
@@ -33,7 +34,7 @@ class _$ValidationErrorCWProxyImpl implements _$ValidationErrorCWProxy {
   final ValidationError _value;
 
   @override
-  ValidationError loc(List<ValidationErrorLocInner> loc) => this(loc: loc);
+  ValidationError loc(List<String> loc) => this(loc: loc);
 
   @override
   ValidationError msg(String msg) => this(msg: msg);
@@ -42,6 +43,7 @@ class _$ValidationErrorCWProxyImpl implements _$ValidationErrorCWProxy {
   ValidationError type(String type) => this(type: type);
 
   @override
+
   /// This function **does support** nullification of nullable fields. All `null` values passed to `non-nullable` fields will be ignored. You can also use `ValidationError(...).copyWith.fieldName(...)` to override fields one at a time with nullification support.
   ///
   /// Usage
@@ -54,15 +56,15 @@ class _$ValidationErrorCWProxyImpl implements _$ValidationErrorCWProxy {
     Object? type = const $CopyWithPlaceholder(),
   }) {
     return ValidationError(
-      loc: loc == const $CopyWithPlaceholder()
+      loc: loc == const $CopyWithPlaceholder() || loc == null
           ? _value.loc
           // ignore: cast_nullable_to_non_nullable
-          : loc as List<ValidationErrorLocInner>,
-      msg: msg == const $CopyWithPlaceholder()
+          : loc as List<String>,
+      msg: msg == const $CopyWithPlaceholder() || msg == null
           ? _value.msg
           // ignore: cast_nullable_to_non_nullable
           : msg as String,
-      type: type == const $CopyWithPlaceholder()
+      type: type == const $CopyWithPlaceholder() || type == null
           ? _value.type
           // ignore: cast_nullable_to_non_nullable
           : type as String,
@@ -81,27 +83,27 @@ extension $ValidationErrorCopyWith on ValidationError {
 // **************************************************************************
 
 ValidationError _$ValidationErrorFromJson(Map<String, dynamic> json) =>
-    $checkedCreate('ValidationError', json, ($checkedConvert) {
-      $checkKeys(json, requiredKeys: const ['loc', 'msg', 'type']);
-      final val = ValidationError(
-        loc: $checkedConvert(
-          'loc',
-          (v) => (v as List<dynamic>)
-              .map(
-                (e) =>
-                    ValidationErrorLocInner.fromJson(e as Map<String, dynamic>),
-              )
-              .toList(),
-        ),
-        msg: $checkedConvert('msg', (v) => v as String),
-        type: $checkedConvert('type', (v) => v as String),
-      );
-      return val;
-    });
+    $checkedCreate(
+      'ValidationError',
+      json,
+      ($checkedConvert) {
+        $checkKeys(
+          json,
+          requiredKeys: const ['loc', 'msg', 'type'],
+        );
+        final val = ValidationError(
+          loc: $checkedConvert('loc',
+              (v) => (v as List<dynamic>).map((e) => e as String).toList()),
+          msg: $checkedConvert('msg', (v) => v as String),
+          type: $checkedConvert('type', (v) => v as String),
+        );
+        return val;
+      },
+    );
 
 Map<String, dynamic> _$ValidationErrorToJson(ValidationError instance) =>
     <String, dynamic>{
-      'loc': instance.loc.map((e) => e.toJson()).toList(),
+      'loc': instance.loc,
       'msg': instance.msg,
       'type': instance.type,
     };

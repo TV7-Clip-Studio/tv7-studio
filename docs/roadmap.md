@@ -1,112 +1,48 @@
-# Desktop + Mobile Client Roadmap (Flutter, Hybrid Processing)
+# TV7 Roadmap (Core & Pro) — aligned to `tv7_high_architecture.md`
 
-## Vision
-- One Flutter codebase targeting macOS/Windows/Linux plus iOS/Android.
-- Heavy processing runs locally (download/normalize/render/subtitles/transcripts) to minimize cloud spend.
-- Cloud keeps auth, metadata/state, optional LLM highlights, and optional publishing.
-- Client syncs metadata to `forgotten-app` API; uses OpenAI via user-supplied key (or backend-provided key if allowed).
+## Phase 1 — Local Pipeline + Cloud Highlights (Core-first)
+- Solidify ingest workspace (`ingest/normalize/render/logs/cache`), dependency checks (`ffmpeg`, `yt-dlp`), and UX for ingest (YouTube/file), progress, and diagnostics/log export.
+- Align clip suggestion endpoint/schema (transcript + prompt → segments with titles/descriptions/hooks); use cloud/backend LLM for highlights and auto-clip creation.
+- Improve clip rendering/editing: timeline/trim, subtitle burn-in, explicit export flow; keep uploads optional.
+- Basic persistence: local cache/queue for videos/clips/uploads; retry on reconnect; error mapping.
 
-## High-Level Split
-### Client (Flutter app)
-- UI, auth, session management.
-- Local ingest: YouTube download (yt-dlp) or file import.
-- Local media pipeline: ffmpeg normalize/render; optional whisper.cpp for transcripts.
-- Optional local highlights if a small model is bundled; otherwise call backend/OpenAI.
-- Upload final clip metadata (and optionally rendered assets) to backend.
-- Optional: invoke backend publishing or do client-side posting with user tokens.
+### Phase 1 Plan
+- **Backend/spec**
+  - Ensure clip suggestion endpoint/schema is in OpenAPI (transcript + optional prompt → segments with start/end/title/description/hook) and regenerate SDK.
+  - Keep login/refresh as-is for now; add only what’s needed for highlights/ingest if missing (e.g., video/clip endpoints).
+- **Client pipeline**
+  - Harden ingest + workspace handling; dependency detection and user guidance.
+  - Wire SDK clip suggestion call into auto-clip flows; better error UX/fallback messaging.
+  - Add timeline/trim/subtitle/export surfaces around the existing ffmpeg flow.
+  - Add lightweight local cache/queue for metadata/uploads with retries.
+- **Testing**
+  - Unit/service tests for clip suggestion mapping, pipeline arg builders, error handling, and queue retry logic.
+  - Smoke: ingest → transcript → highlights → auto-clip render → export.
 
-### Backend (`forgotten-app`)
-- Auth/users, JWT issuance.
-- Video/clip metadata store, status tracking.
-- Optional highlight detection via OpenAI (cloud path).
-- Optional publishing endpoints (centralized platform tokens, if used).
-- API contract (OpenAPI) as the source of truth for client generation.
+### Phase 1 Execution Backlog (ordered)
+1) Inspect OpenAPI spec for clip suggestion and video/clip fields; update spec if needed and regenerate `lib/api/generated`.
+2) Replace ad-hoc highlight call with SDK endpoint; map response to auto-clip flows with error handling/fallback messaging.
+3) Harden ingest workspace handling: dependency checks (`ffmpeg`, `yt-dlp`), workspace hygiene, log capture/export, UX for progress/errors.
+4) Expand export/edit surfaces: timeline/trim controls, subtitle burn-in option, explicit export flow (keep uploads optional).
+5) Add lightweight local cache/queue for video/clip metadata/uploads with retry on reconnect; friendly error mapping in UI.
+6) Tests: unit/service for clip suggestion mapping, pipeline arg builders, queue retry; smoke path covering ingest → highlights → auto-clip → export.
 
-## Bootstrap Steps
-1) Repo setup
-   - Create a new repo dedicated to the Flutter client.
-   - Add license/README; point to `forgotten-app` API docs and auth flow.
-2) Project scaffold
-   - `flutter create forgotten_client` (stable channel).
-   - Establish flavors (dev/stage/prod) with `.env`/dart defines for:
-     - `API_BASE_URL` (forgotten-app)
-     - `OPENAI_MODE` (local/cloud)
-     - `FEATURE_FLAGS` (publishing, local_highlights, etc.)
-3) API client
-   - Export OpenAPI from backend; generate Dart client (e.g., `openapi-generator-cli -g dart-dio`).
-   - Wrap with a thin SDK for auth/token refresh, retries, logging.
-4) Auth
-   - Implement login to backend JWT endpoints.
-   - Store/refresh tokens securely (per platform); add logout/expiry handling.
-5) Local tooling
-   - Bundle or prompt-install binaries:
-     - `ffmpeg` (per platform)
-     - `yt-dlp` for YouTube ingest
-     - `whisper.cpp` (optional) for local transcripts
-   - Provide settings to point to system binaries when bundled is not possible.
-6) Media pipeline (client)
-   - Ingest: download or load local file; validate size/format.
-   - Normalize: ffmpeg scale to 9:16 target height, clamp bitrate; write to temp workspace.
-   - Highlight detection:
-     - Default: call backend/OpenAI with transcript.
-     - Optional: local LLM if available.
-   - Clip rendering: ffmpeg slice + reframe; optional subtitles via local transcript.
-   - Persist workspace under app data directory; clean up on completion.
-7) Sync with backend
-   - Push metadata: video, clip timings, captions, statuses.
-   - Optional: upload rendered assets if cloud storage is desired.
-   - Keep offline cache (e.g., SQLite/hive) and reconcile on reconnect.
-8) Publishing (optional)
-   - If centralized: call backend publish endpoints.
-   - If client-side: store user platform tokens locally and post from the client.
-9) UX essentials
-   - Progress indicators for download/normalize/render.
-   - Error surfacing with logs; allow retry/requeue.
-   - Settings: choose local vs cloud highlights, ffmpeg path, OpenAI key.
-10) Testing/CI
-    - `flutter format`/`analyze`/`test`.
-    - Build checks for macOS/Windows/Linux; optional mobile build smoke.
-    - Lint generated API client into the repo (or pin generator version).
+## Phase 2 — Local Pipeline Completeness (Core)
+- Integrate Whisper.cpp: model selection/download paths, hardware checks, fallback to backend transcription if disabled/failing.
+- Expand pipeline robustness (cancellations, retries, better progress), subtitles, and richer editing polish.
+- Grow local cache/queue (SQLite/Hive) for videos/clips/uploads; friendlier error mapping and recovery.
 
-## Deployment & Distribution
-- Desktop: package per platform (dmg/msix/AppImage). Start with unsigned builds for internal testing.
-- Mobile: TestFlight / Play Internal for testers; consider deferring mobile rendering if perf is inadequate.
-- Update strategy: in-app update checks or link to release downloads.
+## Phase 3 — Pro Scheduler
+- Upload flow to backend storage (direct or signed URL), schedule create/update, status polling; display posted/failed with logs.
+- WebView to backend dashboard for OAuth/platform connections; reflect connected platforms in client config.
+- Worker contract surfaced in UI (status enums, retries, errors); optional notifications/poll cadence.
 
-## Backend Touchpoints
-- Ensure backend OpenAPI is current and published for client generation.
-- Add endpoints (if needed) for:
-  - Uploading rendered assets (optional).
-  - Fetching feature flags/config.
-  - Publishing hooks (stub or real).
-- Keep `MEDIA_STORAGE_DIR`/worker config cloud-side minimal since rendering moves local.
+## Phase 4 — Licensing, Config, & Distribution
+- Add trial/activation/license issuance/refresh endpoints to backend and spec; implement secure token store + cached license token; gate features by plan/expiry; offline allowed while valid.
+- Config fetch and enforcement (publishing/platform/size limits, OpenAI/local policy); surface plan/config in settings.
+- Settings UX for binaries/model paths, license/account view, log export; desktop packaging (dmg/msix/AppImage); minimal mobile parity; telemetry/analytics (opt-in), updates, and release playbooks.
 
-## Operational Notes
-- Keep a single volume-backed worker in the cloud (or none, if rendering is 100% client-side).
-- Use rate limiting and input validation on backend ingest endpoints.
-- Enforce auth on all backend routes; keep secrets out of the client binary (user-provided API keys only, or short-lived tokens from backend).
-
-## Milestones
-1) Scaffold app, auth, API client; simple dashboard pulling backend metadata.
-2) Local ingest + normalize + render on desktop; push metadata to backend.
-3) Transcript + highlight (cloud via OpenAI); wiring to clip creation locally.
-4) Optional local transcript/highlights; settings panel for OpenAI key and binary paths.
-5) Publishing flow (backend-owned; client triggers/polls and uploads assets if required); packaging and release builds for desktop.
-
-## Near-term desktop epics (pipeline-first)
-- Auth + config bootstrap: generate client from OpenAPI (once published), login/refresh wiring, fetch feature flags/config.
-- Ingest + workspace: YouTube URL or file import, workspace layout (/ingest,/normalize,/render,/logs), hashing/validation.
-- Tooling & settings: detect `ffmpeg`/`yt-dlp`, settings UI for binary paths and OpenAI key (if direct calls allowed).
-- Normalize & render: ffmpeg pipeline to 9:16 target, bitrate clamp, clip slicing, process log streaming, cancel/retry.
-- Transcripts/subtitles: local-first `whisper.cpp` for transcripts (with cloud/OpenAI fallback if disabled/failing); burn-in subtitles during render.
-- Sync/offline: push video/clip metadata, captions, statuses; offline cache (Hive/SQLite) and reconciliation on reconnect.
-- UI shells: auth → dashboard → job detail with stage progress → settings/logs.
-
-## OpenAPI TODO
-- Publish and commit the FastAPI OpenAPI spec.
-- Include publish endpoints, status enums, config/feature flags endpoint, and asset upload/signed-URL contract.
-
-## Immediate next steps
-- Create architecture doc outlining platform targets, local tool distribution strategy, app data/workspace layout, and sync model.
-- Bootstrap Flutter project with flavors/env wiring and initial auth flow stub.
-- Pull/export latest `forgotten-app` OpenAPI spec and lock generator version for reproducible client builds.
+## Immediate Actions
+- Update OpenAPI with clip suggestion schema (and any missing video/clip fields), regenerate `lib/api/generated`.
+- Harden ingest and auto-clip flow using SDK highlight endpoint; improve error UX.
+- Lay groundwork for local cache/queue and export flow; keep existing login/refresh unchanged for now.

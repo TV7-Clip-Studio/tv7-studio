@@ -111,7 +111,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Sign in to Forgotten Client (${widget.flavor})',
+                          'Sign in to TV7 (${widget.flavor})',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: Colors.black54),

@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -19,19 +20,30 @@ class Token {
   /// Returns a new [Token] instance.
   Token({
     required this.accessToken,
-
     this.refreshToken,
-
     this.tokenType = 'bearer',
   });
 
-  @JsonKey(name: r'access_token', required: true)
+  @JsonKey(
+    name: r'access_token',
+    required: true,
+    includeIfNull: false,
+  )
   final String accessToken;
 
-  @JsonKey(name: r'refresh_token', required: false)
+  @JsonKey(
+    name: r'refresh_token',
+    required: false,
+    includeIfNull: false,
+  )
   final String? refreshToken;
 
-  @JsonKey(defaultValue: 'bearer', name: r'token_type', required: false)
+  @JsonKey(
+    defaultValue: 'bearer',
+    name: r'token_type',
+    required: false,
+    includeIfNull: false,
+  )
   final String? tokenType;
 
   @override

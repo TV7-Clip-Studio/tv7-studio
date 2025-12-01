@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -19,32 +20,43 @@ part 'video_ingest_response.g.dart';
 class VideoIngestResponse {
   /// Returns a new [VideoIngestResponse] instance.
   VideoIngestResponse({
-    required this.video,
-
-    this.queued = true,
-
     required this.created,
+    this.queued = true,
+    required this.video,
   });
 
-  @JsonKey(name: r'video', required: true)
-  final VideoRead video;
+  @JsonKey(
+    name: r'created',
+    required: true,
+    includeIfNull: false,
+  )
+  final bool created;
 
-  @JsonKey(defaultValue: true, name: r'queued', required: false)
+  @JsonKey(
+    defaultValue: true,
+    name: r'queued',
+    required: false,
+    includeIfNull: false,
+  )
   final bool? queued;
 
-  @JsonKey(name: r'created', required: true)
-  final bool created;
+  @JsonKey(
+    name: r'video',
+    required: true,
+    includeIfNull: false,
+  )
+  final VideoRead video;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is VideoIngestResponse &&
-          other.video == video &&
+          other.created == created &&
           other.queued == queued &&
-          other.created == created;
+          other.video == video;
 
   @override
-  int get hashCode => video.hashCode + queued.hashCode + created.hashCode;
+  int get hashCode => created.hashCode + queued.hashCode + video.hashCode;
 
   factory VideoIngestResponse.fromJson(Map<String, dynamic> json) =>
       _$VideoIngestResponseFromJson(json);

@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -17,21 +18,32 @@ part 'ai_response.g.dart';
 )
 class AIResponse {
   /// Returns a new [AIResponse] instance.
-  AIResponse({required this.output, this.meta});
+  AIResponse({
+    this.meta,
+    required this.output,
+  });
 
-  @JsonKey(name: r'output', required: true)
-  final String output;
-
-  @JsonKey(name: r'meta', required: false)
+  @JsonKey(
+    name: r'meta',
+    required: false,
+    includeIfNull: false,
+  )
   final Map<String, Object>? meta;
+
+  @JsonKey(
+    name: r'output',
+    required: true,
+    includeIfNull: false,
+  )
+  final String output;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is AIResponse && other.output == output && other.meta == meta;
+      other is AIResponse && other.meta == meta && other.output == output;
 
   @override
-  int get hashCode => output.hashCode + meta.hashCode;
+  int get hashCode => meta.hashCode + output.hashCode;
 
   factory AIResponse.fromJson(Map<String, dynamic> json) =>
       _$AIResponseFromJson(json);

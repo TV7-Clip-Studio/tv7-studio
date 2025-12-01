@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -9,6 +10,8 @@ import 'dart:convert';
 import 'package:forgotten_client_api/src/deserialize.dart';
 import 'package:dio/dio.dart';
 
+import 'package:forgotten_client_api/src/model/clip_read.dart';
+import 'package:forgotten_client_api/src/model/clip_upsert.dart';
 import 'package:forgotten_client_api/src/model/http_validation_error.dart';
 import 'package:forgotten_client_api/src/model/local_video_create.dart';
 import 'package:forgotten_client_api/src/model/video_ingest_response.dart';
@@ -19,6 +22,161 @@ class VideosApi {
   final Dio _dio;
 
   const VideosApi(this._dio);
+
+  /// Create Clip For Video
+  ///
+  ///
+  /// Parameters:
+  /// * [videoId]
+  /// * [clipUpsert]
+  /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
+  /// * [headers] - Can be used to add additional headers to the request
+  /// * [extras] - Can be used to add flags to the request
+  /// * [validateStatus] - A [ValidateStatus] callback that can be used to determine request success based on the HTTP status of the response
+  /// * [onSendProgress] - A [ProgressCallback] that can be used to get the send progress
+  /// * [onReceiveProgress] - A [ProgressCallback] that can be used to get the receive progress
+  ///
+  /// Returns a [Future] containing a [Response] with a [ClipRead] as data
+  /// Throws [DioException] if API call or serialization fails
+  Future<Response<ClipRead>> createClipForVideoApiV1VideosVideoIdClipsPost({
+    required int videoId,
+    required ClipUpsert clipUpsert,
+    CancelToken? cancelToken,
+    Map<String, dynamic>? headers,
+    Map<String, dynamic>? extra,
+    ValidateStatus? validateStatus,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    final _path = r'/api/v1/videos/{video_id}/clips'
+        .replaceAll('{' r'video_id' '}', videoId.toString());
+    final _options = Options(
+      method: r'POST',
+      headers: <String, dynamic>{
+        ...?headers,
+      },
+      extra: <String, dynamic>{
+        'secure': <Map<String, String>>[
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
+        ],
+        ...?extra,
+      },
+      contentType: 'application/json',
+      validateStatus: validateStatus,
+    );
+
+    dynamic _bodyData;
+
+    try {
+      _bodyData = jsonEncode(clipUpsert);
+    } catch (error, stackTrace) {
+      throw DioException(
+        requestOptions: _options.compose(
+          _dio.options,
+          _path,
+        ),
+        type: DioExceptionType.unknown,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    final _response = await _dio.request<Object>(
+      _path,
+      data: _bodyData,
+      options: _options,
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
+
+    ClipRead? _responseData;
+
+    try {
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<ClipRead, ClipRead>(rawData, 'ClipRead',
+              growable: true);
+    } catch (error, stackTrace) {
+      throw DioException(
+        requestOptions: _response.requestOptions,
+        response: _response,
+        type: DioExceptionType.unknown,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    return Response<ClipRead>(
+      data: _responseData,
+      headers: _response.headers,
+      isRedirect: _response.isRedirect,
+      requestOptions: _response.requestOptions,
+      redirects: _response.redirects,
+      statusCode: _response.statusCode,
+      statusMessage: _response.statusMessage,
+      extra: _response.extra,
+    );
+  }
+
+  /// Delete Video
+  ///
+  ///
+  /// Parameters:
+  /// * [videoId]
+  /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
+  /// * [headers] - Can be used to add additional headers to the request
+  /// * [extras] - Can be used to add flags to the request
+  /// * [validateStatus] - A [ValidateStatus] callback that can be used to determine request success based on the HTTP status of the response
+  /// * [onSendProgress] - A [ProgressCallback] that can be used to get the send progress
+  /// * [onReceiveProgress] - A [ProgressCallback] that can be used to get the receive progress
+  ///
+  /// Returns a [Future]
+  /// Throws [DioException] if API call or serialization fails
+  Future<Response<void>> deleteVideoApiV1VideosVideoIdDelete({
+    required int videoId,
+    CancelToken? cancelToken,
+    Map<String, dynamic>? headers,
+    Map<String, dynamic>? extra,
+    ValidateStatus? validateStatus,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    final _path = r'/api/v1/videos/{video_id}'
+        .replaceAll('{' r'video_id' '}', videoId.toString());
+    final _options = Options(
+      method: r'DELETE',
+      headers: <String, dynamic>{
+        ...?headers,
+      },
+      extra: <String, dynamic>{
+        'secure': <Map<String, String>>[
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
+        ],
+        ...?extra,
+      },
+      validateStatus: validateStatus,
+    );
+
+    final _response = await _dio.request<Object>(
+      _path,
+      options: _options,
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
+
+    return _response;
+  }
 
   /// Get Video Status
   ///
@@ -43,18 +201,20 @@ class VideosApi {
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async {
-    final _path = r'/api/v1/videos/{video_id}'.replaceAll(
-      '{'
-      r'video_id'
-      '}',
-      videoId.toString(),
-    );
+    final _path = r'/api/v1/videos/{video_id}'
+        .replaceAll('{' r'video_id' '}', videoId.toString());
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{...?headers},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
         ],
         ...?extra,
       },
@@ -75,11 +235,8 @@ class VideosApi {
       final rawData = _response.data;
       _responseData = rawData == null
           ? null
-          : deserialize<VideoRead, VideoRead>(
-              rawData,
-              'VideoRead',
-              growable: true,
-            );
+          : deserialize<VideoRead, VideoRead>(rawData, 'VideoRead',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -118,7 +275,7 @@ class VideosApi {
   /// Returns a [Future] containing a [Response] with a [VideoIngestResponse] as data
   /// Throws [DioException] if API call or serialization fails
   Future<Response<VideoIngestResponse>>
-  ingestUploadEndpointApiV1VideosIngestUploadPost({
+      ingestUploadEndpointApiV1VideosIngestUploadPost({
     required MultipartFile file,
     bool? appendClips,
     CancelToken? cancelToken,
@@ -131,10 +288,16 @@ class VideosApi {
     final _path = r'/api/v1/videos/ingest/upload';
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{...?headers},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
         ],
         ...?extra,
       },
@@ -146,7 +309,10 @@ class VideosApi {
 
     try {} catch (error, stackTrace) {
       throw DioException(
-        requestOptions: _options.compose(_dio.options, _path),
+        requestOptions: _options.compose(
+          _dio.options,
+          _path,
+        ),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -169,10 +335,8 @@ class VideosApi {
       _responseData = rawData == null
           ? null
           : deserialize<VideoIngestResponse, VideoIngestResponse>(
-              rawData,
-              'VideoIngestResponse',
-              growable: true,
-            );
+              rawData, 'VideoIngestResponse',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -210,7 +374,7 @@ class VideosApi {
   /// Returns a [Future] containing a [Response] with a [VideoIngestResponse] as data
   /// Throws [DioException] if API call or serialization fails
   Future<Response<VideoIngestResponse>>
-  ingestYoutubeEndpointApiV1VideosIngestYoutubePost({
+      ingestYoutubeEndpointApiV1VideosIngestYoutubePost({
     required YouTubeIngestRequest youTubeIngestRequest,
     CancelToken? cancelToken,
     Map<String, dynamic>? headers,
@@ -222,10 +386,16 @@ class VideosApi {
     final _path = r'/api/v1/videos/ingest/youtube';
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{...?headers},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
         ],
         ...?extra,
       },
@@ -239,7 +409,10 @@ class VideosApi {
       _bodyData = jsonEncode(youTubeIngestRequest);
     } catch (error, stackTrace) {
       throw DioException(
-        requestOptions: _options.compose(_dio.options, _path),
+        requestOptions: _options.compose(
+          _dio.options,
+          _path,
+        ),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -262,10 +435,8 @@ class VideosApi {
       _responseData = rawData == null
           ? null
           : deserialize<VideoIngestResponse, VideoIngestResponse>(
-              rawData,
-              'VideoIngestResponse',
-              growable: true,
-            );
+              rawData, 'VideoIngestResponse',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -314,10 +485,16 @@ class VideosApi {
     final _path = r'/api/v1/videos/local';
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{...?headers},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
         ],
         ...?extra,
       },
@@ -331,7 +508,10 @@ class VideosApi {
       _bodyData = jsonEncode(localVideoCreate);
     } catch (error, stackTrace) {
       throw DioException(
-        requestOptions: _options.compose(_dio.options, _path),
+        requestOptions: _options.compose(
+          _dio.options,
+          _path,
+        ),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -353,11 +533,8 @@ class VideosApi {
       final rawData = _response.data;
       _responseData = rawData == null
           ? null
-          : deserialize<VideoRead, VideoRead>(
-              rawData,
-              'VideoRead',
-              growable: true,
-            );
+          : deserialize<VideoRead, VideoRead>(rawData, 'VideoRead',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,

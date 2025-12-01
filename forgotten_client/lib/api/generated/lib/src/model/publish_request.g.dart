@@ -1,3 +1,4 @@
+// @dart=3.4
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'publish_request.dart';
@@ -7,13 +8,13 @@ part of 'publish_request.dart';
 // **************************************************************************
 
 abstract class _$PublishRequestCWProxy {
-  PublishRequest platforms(List<String> platforms);
-
-  PublishRequest assetUrl(String? assetUrl);
-
   PublishRequest assetChecksum(String? assetChecksum);
 
   PublishRequest assetSizeBytes(int? assetSizeBytes);
+
+  PublishRequest assetUrl(String? assetUrl);
+
+  PublishRequest platforms(List<String> platforms);
 
   /// This function **does support** nullification of nullable fields. All `null` values passed to `non-nullable` fields will be ignored. You can also use `PublishRequest(...).copyWith.fieldName(...)` to override fields one at a time with nullification support.
   ///
@@ -22,10 +23,10 @@ abstract class _$PublishRequestCWProxy {
   /// PublishRequest(...).copyWith(id: 12, name: "My name")
   /// ````
   PublishRequest call({
-    List<String> platforms,
-    String? assetUrl,
     String? assetChecksum,
     int? assetSizeBytes,
+    String? assetUrl,
+    List<String>? platforms,
   });
 }
 
@@ -36,13 +37,6 @@ class _$PublishRequestCWProxyImpl implements _$PublishRequestCWProxy {
   final PublishRequest _value;
 
   @override
-  PublishRequest platforms(List<String> platforms) =>
-      this(platforms: platforms);
-
-  @override
-  PublishRequest assetUrl(String? assetUrl) => this(assetUrl: assetUrl);
-
-  @override
   PublishRequest assetChecksum(String? assetChecksum) =>
       this(assetChecksum: assetChecksum);
 
@@ -51,6 +45,14 @@ class _$PublishRequestCWProxyImpl implements _$PublishRequestCWProxy {
       this(assetSizeBytes: assetSizeBytes);
 
   @override
+  PublishRequest assetUrl(String? assetUrl) => this(assetUrl: assetUrl);
+
+  @override
+  PublishRequest platforms(List<String> platforms) =>
+      this(platforms: platforms);
+
+  @override
+
   /// This function **does support** nullification of nullable fields. All `null` values passed to `non-nullable` fields will be ignored. You can also use `PublishRequest(...).copyWith.fieldName(...)` to override fields one at a time with nullification support.
   ///
   /// Usage
@@ -58,20 +60,12 @@ class _$PublishRequestCWProxyImpl implements _$PublishRequestCWProxy {
   /// PublishRequest(...).copyWith(id: 12, name: "My name")
   /// ````
   PublishRequest call({
-    Object? platforms = const $CopyWithPlaceholder(),
-    Object? assetUrl = const $CopyWithPlaceholder(),
     Object? assetChecksum = const $CopyWithPlaceholder(),
     Object? assetSizeBytes = const $CopyWithPlaceholder(),
+    Object? assetUrl = const $CopyWithPlaceholder(),
+    Object? platforms = const $CopyWithPlaceholder(),
   }) {
     return PublishRequest(
-      platforms: platforms == const $CopyWithPlaceholder()
-          ? _value.platforms
-          // ignore: cast_nullable_to_non_nullable
-          : platforms as List<String>,
-      assetUrl: assetUrl == const $CopyWithPlaceholder()
-          ? _value.assetUrl
-          // ignore: cast_nullable_to_non_nullable
-          : assetUrl as String?,
       assetChecksum: assetChecksum == const $CopyWithPlaceholder()
           ? _value.assetChecksum
           // ignore: cast_nullable_to_non_nullable
@@ -80,6 +74,14 @@ class _$PublishRequestCWProxyImpl implements _$PublishRequestCWProxy {
           ? _value.assetSizeBytes
           // ignore: cast_nullable_to_non_nullable
           : assetSizeBytes as int?,
+      assetUrl: assetUrl == const $CopyWithPlaceholder()
+          ? _value.assetUrl
+          // ignore: cast_nullable_to_non_nullable
+          : assetUrl as String?,
+      platforms: platforms == const $CopyWithPlaceholder() || platforms == null
+          ? _value.platforms
+          // ignore: cast_nullable_to_non_nullable
+          : platforms as List<String>,
     );
   }
 }
@@ -99,32 +101,39 @@ PublishRequest _$PublishRequestFromJson(Map<String, dynamic> json) =>
       'PublishRequest',
       json,
       ($checkedConvert) {
-        $checkKeys(json, requiredKeys: const ['platforms']);
+        $checkKeys(
+          json,
+          requiredKeys: const ['platforms'],
+        );
         final val = PublishRequest(
-          platforms: $checkedConvert(
-            'platforms',
-            (v) => (v as List<dynamic>).map((e) => e as String).toList(),
-          ),
-          assetUrl: $checkedConvert('asset_url', (v) => v as String?),
           assetChecksum: $checkedConvert('asset_checksum', (v) => v as String?),
-          assetSizeBytes: $checkedConvert(
-            'asset_size_bytes',
-            (v) => (v as num?)?.toInt(),
-          ),
+          assetSizeBytes:
+              $checkedConvert('asset_size_bytes', (v) => (v as num?)?.toInt()),
+          assetUrl: $checkedConvert('asset_url', (v) => v as String?),
+          platforms: $checkedConvert('platforms',
+              (v) => (v as List<dynamic>).map((e) => e as String).toList()),
         );
         return val;
       },
       fieldKeyMap: const {
-        'assetUrl': 'asset_url',
         'assetChecksum': 'asset_checksum',
         'assetSizeBytes': 'asset_size_bytes',
+        'assetUrl': 'asset_url'
       },
     );
 
-Map<String, dynamic> _$PublishRequestToJson(PublishRequest instance) =>
-    <String, dynamic>{
-      'platforms': instance.platforms,
-      'asset_url': instance.assetUrl,
-      'asset_checksum': instance.assetChecksum,
-      'asset_size_bytes': instance.assetSizeBytes,
-    };
+Map<String, dynamic> _$PublishRequestToJson(PublishRequest instance) {
+  final val = <String, dynamic>{};
+
+  void writeNotNull(String key, dynamic value) {
+    if (value != null) {
+      val[key] = value;
+    }
+  }
+
+  writeNotNull('asset_checksum', instance.assetChecksum);
+  writeNotNull('asset_size_bytes', instance.assetSizeBytes);
+  writeNotNull('asset_url', instance.assetUrl);
+  val['platforms'] = instance.platforms;
+  return val;
+}
