@@ -57,6 +57,16 @@ dart run build_runner build --delete-conflicting-outputs
 echo "Regenerated code with build_runner"
 
 # Patch files to enforce language version 3.4 (resolves mismatch with generated code)
-find lib/src -name "*.dart" -exec sed -i '' '1s/^/\/\/ @dart=3.4\n/' {} +
+if sed --version >/dev/null 2>&1; then
+  # GNU sed
+  SED_INPLACE=(-i)
+else
+  # BSD/macOS sed
+  SED_INPLACE=(-i '')
+fi
+
+find lib/src -name "*.dart" -print0 | while IFS= read -r -d '' file; do
+  sed "${SED_INPLACE[@]}" '1s/^/\/\/ @dart=3.4\n/' "$file"
+done
 
 echo "Patched generated files with // @dart=3.4"
