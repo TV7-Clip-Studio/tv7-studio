@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -18,9 +19,15 @@ part 'http_validation_error.g.dart';
 )
 class HTTPValidationError {
   /// Returns a new [HTTPValidationError] instance.
-  HTTPValidationError({this.detail});
+  HTTPValidationError({
+    this.detail,
+  });
 
-  @JsonKey(name: r'detail', required: false)
+  @JsonKey(
+    name: r'detail',
+    required: false,
+    includeIfNull: false,
+  )
   final List<ValidationError>? detail;
 
   @override

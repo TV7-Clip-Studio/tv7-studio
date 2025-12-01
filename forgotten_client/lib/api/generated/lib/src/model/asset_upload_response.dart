@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -18,41 +19,54 @@ part 'asset_upload_response.g.dart';
 class AssetUploadResponse {
   /// Returns a new [AssetUploadResponse] instance.
   AssetUploadResponse({
-    required this.assetUrl,
-
     required this.assetChecksum,
-
     required this.assetSizeBytes,
-
+    required this.assetUrl,
     this.contentType,
   });
 
-  @JsonKey(name: r'asset_url', required: true)
-  final String assetUrl;
-
-  @JsonKey(name: r'asset_checksum', required: true)
+  @JsonKey(
+    name: r'asset_checksum',
+    required: true,
+    includeIfNull: false,
+  )
   final String assetChecksum;
 
-  @JsonKey(name: r'asset_size_bytes', required: true)
+  @JsonKey(
+    name: r'asset_size_bytes',
+    required: true,
+    includeIfNull: false,
+  )
   final int assetSizeBytes;
 
-  @JsonKey(name: r'content_type', required: false)
+  @JsonKey(
+    name: r'asset_url',
+    required: true,
+    includeIfNull: false,
+  )
+  final String assetUrl;
+
+  @JsonKey(
+    name: r'content_type',
+    required: false,
+    includeIfNull: false,
+  )
   final String? contentType;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is AssetUploadResponse &&
-          other.assetUrl == assetUrl &&
           other.assetChecksum == assetChecksum &&
           other.assetSizeBytes == assetSizeBytes &&
+          other.assetUrl == assetUrl &&
           other.contentType == contentType;
 
   @override
   int get hashCode =>
-      assetUrl.hashCode +
       assetChecksum.hashCode +
       assetSizeBytes.hashCode +
+      assetUrl.hashCode +
       (contentType == null ? 0 : contentType.hashCode);
 
   factory AssetUploadResponse.fromJson(Map<String, dynamic> json) =>

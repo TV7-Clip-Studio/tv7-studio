@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -11,6 +12,8 @@ import 'package:dio/dio.dart';
 
 import 'package:forgotten_client_api/src/model/ai_request.dart';
 import 'package:forgotten_client_api/src/model/ai_response.dart';
+import 'package:forgotten_client_api/src/model/highlight_request.dart';
+import 'package:forgotten_client_api/src/model/highlight_response.dart';
 import 'package:forgotten_client_api/src/model/http_validation_error.dart';
 
 class AiApi {
@@ -44,10 +47,16 @@ class AiApi {
     final _path = r'/api/v1/ai/execute';
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{...?headers},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
         ],
         ...?extra,
       },
@@ -61,7 +70,10 @@ class AiApi {
       _bodyData = jsonEncode(aIRequest);
     } catch (error, stackTrace) {
       throw DioException(
-        requestOptions: _options.compose(_dio.options, _path),
+        requestOptions: _options.compose(
+          _dio.options,
+          _path,
+        ),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -83,11 +95,8 @@ class AiApi {
       final rawData = _response.data;
       _responseData = rawData == null
           ? null
-          : deserialize<AIResponse, AIResponse>(
-              rawData,
-              'AIResponse',
-              growable: true,
-            );
+          : deserialize<AIResponse, AIResponse>(rawData, 'AIResponse',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -99,6 +108,105 @@ class AiApi {
     }
 
     return Response<AIResponse>(
+      data: _responseData,
+      headers: _response.headers,
+      isRedirect: _response.isRedirect,
+      requestOptions: _response.requestOptions,
+      redirects: _response.redirects,
+      statusCode: _response.statusCode,
+      statusMessage: _response.statusMessage,
+      extra: _response.extra,
+    );
+  }
+
+  /// Generate Highlights
+  ///
+  ///
+  /// Parameters:
+  /// * [highlightRequest]
+  /// * [cancelToken] - A [CancelToken] that can be used to cancel the operation
+  /// * [headers] - Can be used to add additional headers to the request
+  /// * [extras] - Can be used to add flags to the request
+  /// * [validateStatus] - A [ValidateStatus] callback that can be used to determine request success based on the HTTP status of the response
+  /// * [onSendProgress] - A [ProgressCallback] that can be used to get the send progress
+  /// * [onReceiveProgress] - A [ProgressCallback] that can be used to get the receive progress
+  ///
+  /// Returns a [Future] containing a [Response] with a [HighlightResponse] as data
+  /// Throws [DioException] if API call or serialization fails
+  Future<Response<HighlightResponse>> generateHighlightsApiV1AiHighlightsPost({
+    required HighlightRequest highlightRequest,
+    CancelToken? cancelToken,
+    Map<String, dynamic>? headers,
+    Map<String, dynamic>? extra,
+    ValidateStatus? validateStatus,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    final _path = r'/api/v1/ai/highlights';
+    final _options = Options(
+      method: r'POST',
+      headers: <String, dynamic>{
+        ...?headers,
+      },
+      extra: <String, dynamic>{
+        'secure': <Map<String, String>>[
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
+        ],
+        ...?extra,
+      },
+      contentType: 'application/json',
+      validateStatus: validateStatus,
+    );
+
+    dynamic _bodyData;
+
+    try {
+      _bodyData = jsonEncode(highlightRequest);
+    } catch (error, stackTrace) {
+      throw DioException(
+        requestOptions: _options.compose(
+          _dio.options,
+          _path,
+        ),
+        type: DioExceptionType.unknown,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    final _response = await _dio.request<Object>(
+      _path,
+      data: _bodyData,
+      options: _options,
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
+
+    HighlightResponse? _responseData;
+
+    try {
+      final rawData = _response.data;
+      _responseData = rawData == null
+          ? null
+          : deserialize<HighlightResponse, HighlightResponse>(
+              rawData, 'HighlightResponse',
+              growable: true);
+    } catch (error, stackTrace) {
+      throw DioException(
+        requestOptions: _response.requestOptions,
+        response: _response,
+        type: DioExceptionType.unknown,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    return Response<HighlightResponse>(
       data: _responseData,
       headers: _response.headers,
       isRedirect: _response.isRedirect,

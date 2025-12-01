@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -43,18 +44,20 @@ class ClipsApi {
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async {
-    final _path = r'/api/v1/clips/{clip_id}'.replaceAll(
-      '{'
-      r'clip_id'
-      '}',
-      clipId.toString(),
-    );
+    final _path = r'/api/v1/clips/{clip_id}'
+        .replaceAll('{' r'clip_id' '}', clipId.toString());
     final _options = Options(
       method: r'PATCH',
-      headers: <String, dynamic>{...?headers},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
         ],
         ...?extra,
       },
@@ -68,7 +71,10 @@ class ClipsApi {
       _bodyData = jsonEncode(clipUpdateRequest);
     } catch (error, stackTrace) {
       throw DioException(
-        requestOptions: _options.compose(_dio.options, _path),
+        requestOptions: _options.compose(
+          _dio.options,
+          _path,
+        ),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -90,11 +96,8 @@ class ClipsApi {
       final rawData = _response.data;
       _responseData = rawData == null
           ? null
-          : deserialize<ClipRead, ClipRead>(
-              rawData,
-              'ClipRead',
-              growable: true,
-            );
+          : deserialize<ClipRead, ClipRead>(rawData, 'ClipRead',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,

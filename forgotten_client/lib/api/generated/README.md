@@ -83,8 +83,13 @@ Class | Method | HTTP request | Description
 [*AdminApi*](doc/AdminApi.md) | [**youtubeConnectAdminYoutubeConnectGet**](doc/AdminApi.md#youtubeconnectadminyoutubeconnectget) | **GET** /admin/youtube/connect | Youtube Connect
 [*AdminApi*](doc/AdminApi.md) | [**youtubeDisconnectAdminYoutubeDisconnectPost**](doc/AdminApi.md#youtubedisconnectadminyoutubedisconnectpost) | **POST** /admin/youtube/disconnect | Youtube Disconnect
 [*AiApi*](doc/AiApi.md) | [**executeApiV1AiExecutePost**](doc/AiApi.md#executeapiv1aiexecutepost) | **POST** /api/v1/ai/execute | Execute
+[*AiApi*](doc/AiApi.md) | [**generateHighlightsApiV1AiHighlightsPost**](doc/AiApi.md#generatehighlightsapiv1aihighlightspost) | **POST** /api/v1/ai/highlights | Generate Highlights
+[*AuthApi*](doc/AuthApi.md) | [**activateLicenseApiV1AuthActivatePost**](doc/AuthApi.md#activatelicenseapiv1authactivatepost) | **POST** /api/v1/auth/activate | Activate License
+[*AuthApi*](doc/AuthApi.md) | [**getLicenseApiV1AuthLicenseGet**](doc/AuthApi.md#getlicenseapiv1authlicenseget) | **GET** /api/v1/auth/license | Get License
 [*AuthApi*](doc/AuthApi.md) | [**loginApiV1AuthLoginPost**](doc/AuthApi.md#loginapiv1authloginpost) | **POST** /api/v1/auth/login | Login
+[*AuthApi*](doc/AuthApi.md) | [**refreshLicenseApiV1AuthLicenseRefreshPost**](doc/AuthApi.md#refreshlicenseapiv1authlicenserefreshpost) | **POST** /api/v1/auth/license/refresh | Refresh License
 [*AuthApi*](doc/AuthApi.md) | [**refreshTokenApiV1AuthRefreshPost**](doc/AuthApi.md#refreshtokenapiv1authrefreshpost) | **POST** /api/v1/auth/refresh | Refresh Token
+[*AuthApi*](doc/AuthApi.md) | [**registerApiV1AuthRegisterPost**](doc/AuthApi.md#registerapiv1authregisterpost) | **POST** /api/v1/auth/register | Register
 [*ClipsApi*](doc/ClipsApi.md) | [**updateClipApiV1ClipsClipIdPatch**](doc/ClipsApi.md#updateclipapiv1clipsclipidpatch) | **PATCH** /api/v1/clips/{clip_id} | Update Clip
 [*ConfigApi*](doc/ConfigApi.md) | [**getConfigApiV1ConfigGet**](doc/ConfigApi.md#getconfigapiv1configget) | **GET** /api/v1/config | Get Config
 [*DefaultApi*](doc/DefaultApi.md) | [**healthHealthGet**](doc/DefaultApi.md#healthhealthget) | **GET** /health | Health
@@ -96,6 +101,8 @@ Class | Method | HTTP request | Description
 [*UploadsApi*](doc/UploadsApi.md) | [**uploadAssetApiV1UploadsAssetsPost**](doc/UploadsApi.md#uploadassetapiv1uploadsassetspost) | **POST** /api/v1/uploads/assets | Upload Asset
 [*UsersApi*](doc/UsersApi.md) | [**createUserEndpointApiV1UsersPost**](doc/UsersApi.md#createuserendpointapiv1userspost) | **POST** /api/v1/users/ | Create User Endpoint
 [*UsersApi*](doc/UsersApi.md) | [**listUsersEndpointApiV1UsersGet**](doc/UsersApi.md#listusersendpointapiv1usersget) | **GET** /api/v1/users/ | List Users Endpoint
+[*VideosApi*](doc/VideosApi.md) | [**createClipForVideoApiV1VideosVideoIdClipsPost**](doc/VideosApi.md#createclipforvideoapiv1videosvideoidclipspost) | **POST** /api/v1/videos/{video_id}/clips | Create Clip For Video
+[*VideosApi*](doc/VideosApi.md) | [**deleteVideoApiV1VideosVideoIdDelete**](doc/VideosApi.md#deletevideoapiv1videosvideoiddelete) | **DELETE** /api/v1/videos/{video_id} | Delete Video
 [*VideosApi*](doc/VideosApi.md) | [**getVideoStatusApiV1VideosVideoIdGet**](doc/VideosApi.md#getvideostatusapiv1videosvideoidget) | **GET** /api/v1/videos/{video_id} | Get Video Status
 [*VideosApi*](doc/VideosApi.md) | [**ingestUploadEndpointApiV1VideosIngestUploadPost**](doc/VideosApi.md#ingestuploadendpointapiv1videosingestuploadpost) | **POST** /api/v1/videos/ingest/upload | Ingest Upload Endpoint
 [*VideosApi*](doc/VideosApi.md) | [**ingestYoutubeEndpointApiV1VideosIngestYoutubePost**](doc/VideosApi.md#ingestyoutubeendpointapiv1videosingestyoutubepost) | **POST** /api/v1/videos/ingest/youtube | Ingest Youtube Endpoint
@@ -106,6 +113,7 @@ Class | Method | HTTP request | Description
 
  - [AIRequest](doc/AIRequest.md)
  - [AIResponse](doc/AIResponse.md)
+ - [ActivateLicenseRequest](doc/ActivateLicenseRequest.md)
  - [AssetUploadResponse](doc/AssetUploadResponse.md)
  - [ClipGenerationMode](doc/ClipGenerationMode.md)
  - [ClipRead](doc/ClipRead.md)
@@ -114,17 +122,21 @@ Class | Method | HTTP request | Description
  - [ClipUpsert](doc/ClipUpsert.md)
  - [ConfigRead](doc/ConfigRead.md)
  - [HTTPValidationError](doc/HTTPValidationError.md)
+ - [HighlightRequest](doc/HighlightRequest.md)
+ - [HighlightResponse](doc/HighlightResponse.md)
+ - [LicenseStatus](doc/LicenseStatus.md)
  - [LocalVideoCreate](doc/LocalVideoCreate.md)
  - [LoginRequest](doc/LoginRequest.md)
+ - [PlanType](doc/PlanType.md)
  - [PublishJobRead](doc/PublishJobRead.md)
  - [PublishJobStatus](doc/PublishJobStatus.md)
  - [PublishRequest](doc/PublishRequest.md)
+ - [SuggestedClip](doc/SuggestedClip.md)
  - [Token](doc/Token.md)
  - [TokenRefreshRequest](doc/TokenRefreshRequest.md)
  - [UserCreate](doc/UserCreate.md)
  - [UserRead](doc/UserRead.md)
  - [ValidationError](doc/ValidationError.md)
- - [ValidationErrorLocInner](doc/ValidationErrorLocInner.md)
  - [VideoIngestResponse](doc/VideoIngestResponse.md)
  - [VideoIngestType](doc/VideoIngestType.md)
  - [VideoRead](doc/VideoRead.md)

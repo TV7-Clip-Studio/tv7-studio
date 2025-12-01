@@ -33,107 +33,10 @@ class VideoItem {
   final String? parentBasename;
 }
 
-class SuggestedClip {
-  SuggestedClip({
-    required this.startSec,
-    required this.endSec,
-    required this.hook,
-  });
-
-  factory SuggestedClip.fromJson(Map<String, dynamic> json) {
-    return SuggestedClip(
-      startSec: json['start_sec'] as int,
-      endSec: json['end_sec'] as int,
-      hook: json['hook'] as String,
-    );
-  }
-  final int startSec;
-  final int endSec;
-  final String hook;
-}
-
-class HighlightResponse {
-  HighlightResponse({required this.clips, this.maxClips});
-
-  factory HighlightResponse.fromJson(Map<String, dynamic> json) {
-    final clips = (json['clips'] as List<dynamic>? ?? [])
-        .map((e) => SuggestedClip.fromJson(e as Map<String, dynamic>))
-        .toList();
-    return HighlightResponse(clips: clips, maxClips: json['max_clips'] as int?);
-  }
-
-  final List<SuggestedClip> clips;
-  final int? maxClips;
-}
-
 class TranscriptResult {
   TranscriptResult({required this.text, this.languageCode});
   final String text;
   final String? languageCode;
-}
-
-enum ClipStatus {
-  rendering('rendering'),
-  ready('ready'),
-  publishedPartial('published_partial'),
-  publishedAll('published_all'),
-  error('error');
-
-  const ClipStatus(this.value);
-
-  final String value;
-}
-
-class ClipUpsert {
-  ClipUpsert({
-    required this.startSec,
-    required this.endSec,
-    this.localPath,
-    this.assetUrl,
-    this.assetChecksum,
-    this.assetSizeBytes,
-    this.readyLocalOnly = false,
-    this.captionText,
-    this.renderWidth,
-    this.renderHeight,
-    this.frameRate,
-    this.fileSizeBytes,
-    this.thumbnailPath,
-    this.status = ClipStatus.ready,
-  });
-  final int startSec;
-  final int endSec;
-  final String? localPath;
-  final String? assetUrl;
-  final String? assetChecksum;
-  final int? assetSizeBytes;
-  final bool readyLocalOnly;
-  final String? captionText;
-  final int? renderWidth;
-  final int? renderHeight;
-  final double? frameRate;
-  final int? fileSizeBytes;
-  final String? thumbnailPath;
-  final ClipStatus status;
-
-  Map<String, dynamic> toJson() {
-    return {
-      'start_sec': startSec,
-      'end_sec': endSec,
-      'local_path': localPath,
-      'asset_url': assetUrl,
-      'asset_checksum': assetChecksum,
-      'asset_size_bytes': assetSizeBytes,
-      'ready_local_only': readyLocalOnly,
-      'caption_text': captionText,
-      'render_width': renderWidth,
-      'render_height': renderHeight,
-      'frame_rate': frameRate,
-      'file_size_bytes': fileSizeBytes,
-      'thumbnail_path': thumbnailPath,
-      'status': status.value,
-    };
-  }
 }
 
 class ClientVideoRepository {
@@ -141,12 +44,14 @@ class ClientVideoRepository {
     required ToolRunner toolRunner,
     required this.videosApi,
     required this.uploadsApi,
+    required this.aiApi,
     required this.dio,
   }) : runner = toolRunner;
 
   final ToolRunner runner;
   final api.VideosApi videosApi;
   final api.UploadsApi uploadsApi;
+  final api.AiApi aiApi;
   final Dio dio;
 
   Future<Directory> get _workspace async {
@@ -251,34 +156,28 @@ class ClientVideoRepository {
     return buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  Future<HighlightResponse> detectHighlights(
+  Future<api.HighlightResponse> detectHighlights(
     String transcript,
     int durationSeconds, {
     String? transcriptLanguage,
+    String? prompt,
+    int? maxClips,
   }) async {
     try {
-      final response = await dio.post<Map<String, dynamic>>(
-        '/api/v1/ai/highlights',
-        data: {
-          'transcript': transcript,
-          'duration_seconds': durationSeconds,
-          if (transcriptLanguage != null)
-            'transcript_language': transcriptLanguage,
-        },
+      final response = await aiApi.generateHighlightsApiV1AiHighlightsPost(
+        highlightRequest: api.HighlightRequest(
+          transcript: transcript,
+          durationSeconds: durationSeconds,
+          transcriptLanguage: transcriptLanguage,
+          prompt: prompt,
+          maxClips: maxClips,
+        ),
       );
-
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data == null) {
-          throw Exception('Highlight detection returned empty payload');
-        }
-        return HighlightResponse.fromJson(data);
+      final data = response.data;
+      if (data == null) {
+        throw Exception('Highlight detection returned empty payload');
       }
-      if (response.statusCode == 422) {
-        final detail = response.data;
-        throw Exception('Highlights validation failed: $detail');
-      }
-      throw Exception('Failed to detect highlights: ${response.statusCode}');
+      return data;
     } catch (e, stackTrace) {
       developer.log(
         'Highlight detection error',
@@ -287,6 +186,70 @@ class ClientVideoRepository {
       );
       rethrow;
     }
+  }
+
+  Future<List<api.SuggestedClip>> loadLocalClipsForSource(
+    String sourcePath,
+  ) async {
+    final directory = File(sourcePath).parent;
+    if (!await directory.exists()) return [];
+
+    final sourceBase = p.basenameWithoutExtension(sourcePath);
+    final entities = await directory.list().toList();
+    final clips = <api.SuggestedClip>[];
+
+    for (final entity in entities.whereType<File>()) {
+      final ext = p.extension(entity.path).toLowerCase();
+      if (!['.mp4', '.mkv', '.mov', '.avi', '.webm'].contains(ext)) continue;
+
+      final metaFile = File('${entity.path}.meta.json');
+      if (!await metaFile.exists()) continue;
+
+      try {
+        final meta =
+            jsonDecode(await metaFile.readAsString()) as Map<String, dynamic>;
+        final isClip = meta['is_clip'] as bool? ?? false;
+        final parent = meta['parent_basename'] as String?;
+        if (!isClip) continue;
+        // If parent basename is missing, best-effort derive from filename.
+        final parentName =
+            parent ??
+            (() {
+              final name = p.basenameWithoutExtension(entity.path);
+              final index = name.indexOf('_clip_');
+              if (index != -1) return name.substring(0, index);
+              return null;
+            })();
+        if (parentName == null || parentName != sourceBase) continue;
+
+        final start = meta['start_sec'] as int?;
+        final end = meta['end_sec'] as int?;
+        if (start == null || end == null || end <= start) continue;
+
+        final hook =
+            meta['hook'] as String? ??
+            meta['title'] as String? ??
+            p.basename(entity.path);
+        final description = meta['description'] as String? ?? '';
+        final title = meta['title'] as String? ?? hook;
+
+        clips.add(
+          api.SuggestedClip(
+            startSec: start,
+            endSec: end,
+            title: title,
+            description: description,
+            hook: hook,
+          ),
+        );
+      } catch (_) {
+        continue;
+      }
+    }
+
+    // Sort by start time for stable rendering.
+    clips.sort((a, b) => a.startSec.compareTo(b.startSec));
+    return clips;
   }
 
   String? _selectSubtitleLanguage(Map<String, dynamic> meta) {
@@ -310,16 +273,18 @@ class ClientVideoRepository {
       file.path,
       filename: fileName,
     );
+    final formData = FormData.fromMap({'file': multipartFile});
 
-    final response = await uploadsApi.uploadAssetApiV1UploadsAssetsPost(
-      file: multipartFile,
+    final response = await dio.post<Map<String, dynamic>>(
+      '/api/v1/uploads/assets',
+      data: formData,
     );
 
-    if (response.data == null) {
+    if (response.data == null || response.data!['asset_url'] == null) {
       throw Exception('Upload failed: No data returned');
     }
 
-    final url = _absoluteUrl(response.data!.assetUrl);
+    final url = _absoluteUrl(response.data!['asset_url'] as String);
     developer.log('Uploaded asset', error: {'path': file.path, 'url': url});
     return url;
   }
@@ -438,18 +403,19 @@ class ClientVideoRepository {
     }
   }
 
-  Future<void> createClipForVideo(int videoId, ClipUpsert clip) async {
+  Future<void> deleteVideoById(int videoId) async {
+    await dio.delete<void>('/api/v1/videos/$videoId');
+  }
+
+  Future<void> createClipForVideo(int videoId, api.ClipUpsert clip) async {
     try {
-      final payload = clip.toJson();
-      developer.log('Creating clip for video $videoId', error: payload);
-      final response = await dio.post<Map<String, dynamic>>(
-        '/api/v1/videos/$videoId/clips',
-        data: payload,
+      developer.log('Creating clip for video $videoId', error: clip.toJson());
+      // Use the generated API client instead of raw Dio call
+      await videosApi.createClipForVideoApiV1VideosVideoIdClipsPost(
+        videoId: videoId,
+        clipUpsert: clip,
       );
-      developer.log(
-        'Created clip response',
-        error: {'status': response.statusCode, 'data': response.data},
-      );
+      developer.log('Created clip successfully');
     } catch (e, stackTrace) {
       developer.log(
         'Failed to add clip to video',

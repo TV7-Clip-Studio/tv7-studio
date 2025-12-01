@@ -1,3 +1,5 @@
+// @dart=3.4
+// @dart=3.4
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'token.dart';
@@ -19,7 +21,11 @@ abstract class _$TokenCWProxy {
   /// ```dart
   /// Token(...).copyWith(id: 12, name: "My name")
   /// ````
-  Token call({String accessToken, String? refreshToken, String? tokenType});
+  Token call({
+    String? accessToken,
+    String? refreshToken,
+    String? tokenType,
+  });
 }
 
 /// Proxy class for `copyWith` functionality. This is a callable class and can be used as follows: `instanceOfToken.copyWith(...)`. Additionally contains functions for specific fields e.g. `instanceOfToken.copyWith.fieldName(...)`
@@ -38,6 +44,7 @@ class _$TokenCWProxyImpl implements _$TokenCWProxy {
   Token tokenType(String? tokenType) => this(tokenType: tokenType);
 
   @override
+
   /// This function **does support** nullification of nullable fields. All `null` values passed to `non-nullable` fields will be ignored. You can also use `Token(...).copyWith.fieldName(...)` to override fields one at a time with nullification support.
   ///
   /// Usage
@@ -50,10 +57,11 @@ class _$TokenCWProxyImpl implements _$TokenCWProxy {
     Object? tokenType = const $CopyWithPlaceholder(),
   }) {
     return Token(
-      accessToken: accessToken == const $CopyWithPlaceholder()
-          ? _value.accessToken
-          // ignore: cast_nullable_to_non_nullable
-          : accessToken as String,
+      accessToken:
+          accessToken == const $CopyWithPlaceholder() || accessToken == null
+              ? _value.accessToken
+              // ignore: cast_nullable_to_non_nullable
+              : accessToken as String,
       refreshToken: refreshToken == const $CopyWithPlaceholder()
           ? _value.refreshToken
           // ignore: cast_nullable_to_non_nullable
@@ -77,26 +85,40 @@ extension $TokenCopyWith on Token {
 // **************************************************************************
 
 Token _$TokenFromJson(Map<String, dynamic> json) => $checkedCreate(
-  'Token',
-  json,
-  ($checkedConvert) {
-    $checkKeys(json, requiredKeys: const ['access_token']);
-    final val = Token(
-      accessToken: $checkedConvert('access_token', (v) => v as String),
-      refreshToken: $checkedConvert('refresh_token', (v) => v as String?),
-      tokenType: $checkedConvert('token_type', (v) => v as String? ?? 'bearer'),
+      'Token',
+      json,
+      ($checkedConvert) {
+        $checkKeys(
+          json,
+          requiredKeys: const ['access_token'],
+        );
+        final val = Token(
+          accessToken: $checkedConvert('access_token', (v) => v as String),
+          refreshToken: $checkedConvert('refresh_token', (v) => v as String?),
+          tokenType:
+              $checkedConvert('token_type', (v) => v as String? ?? 'bearer'),
+        );
+        return val;
+      },
+      fieldKeyMap: const {
+        'accessToken': 'access_token',
+        'refreshToken': 'refresh_token',
+        'tokenType': 'token_type'
+      },
     );
-    return val;
-  },
-  fieldKeyMap: const {
-    'accessToken': 'access_token',
-    'refreshToken': 'refresh_token',
-    'tokenType': 'token_type',
-  },
-);
 
-Map<String, dynamic> _$TokenToJson(Token instance) => <String, dynamic>{
-  'access_token': instance.accessToken,
-  'refresh_token': instance.refreshToken,
-  'token_type': instance.tokenType,
-};
+Map<String, dynamic> _$TokenToJson(Token instance) {
+  final val = <String, dynamic>{
+    'access_token': instance.accessToken,
+  };
+
+  void writeNotNull(String key, dynamic value) {
+    if (value != null) {
+      val[key] = value;
+    }
+  }
+
+  writeNotNull('refresh_token', instance.refreshToken);
+  writeNotNull('token_type', instance.tokenType);
+  return val;
+}

@@ -13,7 +13,7 @@ import 'package:forgotten_client/features/dashboard/clip_creation_dialog.dart';
 import 'package:forgotten_client/features/ingest/ingest_page.dart';
 import 'package:forgotten_client/features/player/video_player_page.dart';
 import 'package:forgotten_client/features/user/user_page.dart';
-import 'package:forgotten_client_api/forgotten_client_api.dart' hide ClipUpsert;
+import 'package:forgotten_client_api/forgotten_client_api.dart';
 import 'package:path/path.dart' as p;
 
 class DashboardPage extends StatefulWidget {
@@ -40,6 +40,7 @@ class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
   List<VideoItem> _videos = [];
   Map<String, List<VideoItem>> _groupedVideos = {};
+  final Map<String, int> _groupBackendIds = {};
   bool _loading = true;
   String _search = '';
   final bool _autoPromptNextClip = true;
@@ -54,6 +55,162 @@ class _DashboardPageState extends State<DashboardPage> {
     _loadVideos();
   }
 
+  Future<int> _ensureBackendVideo(
+    String groupKey,
+    VideoItem sourceVideo, {
+    bool recreate = false,
+  }) async {
+    int? backendId = _groupBackendIds[groupKey] ?? sourceVideo.backendId;
+    if (recreate && backendId != null) {
+      await widget.localVideoRepository.deleteVideoById(backendId);
+      backendId = null;
+    }
+
+    if (backendId != null) {
+      return backendId;
+    }
+
+    final created = await widget.localVideoRepository.syncVideo(sourceVideo);
+    final createdId = created.id;
+    _groupBackendIds[groupKey] = createdId;
+    return createdId;
+  }
+
+  Future<void> _syncAllForVideo(
+    VideoItem sourceVideo,
+    List<VideoItem> clips,
+    String groupKey,
+  ) async {
+    try {
+      final videoId = await _ensureBackendVideo(
+        groupKey,
+        sourceVideo,
+        recreate: true,
+      );
+      var success = 0;
+      final clipItems = clips.where((c) => c.isClip).toList();
+      for (final clip in clipItems) {
+        await _syncClipWithVideoId(clip, videoId);
+        success++;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Synced $success/${clipItems.length} clips')),
+        );
+      }
+      await _loadVideos();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Sync all failed: $e')));
+      }
+    }
+  }
+
+  Future<void> _syncSingleClip(
+    VideoItem clip, {
+    required String sourceKey,
+  }) async {
+    try {
+      // Find source video from the grouped map
+      final sourceGroup = _groupedVideos[sourceKey];
+      final sourceVideo = sourceGroup?.firstWhere(
+        (v) => !v.isClip,
+        orElse: () => sourceGroup.first,
+      );
+      if (sourceVideo == null) {
+        throw Exception('Source video not found for $sourceKey');
+      }
+      final videoId = await _ensureBackendVideo(sourceKey, sourceVideo);
+      await _syncClipWithVideoId(clip, videoId);
+      await _loadVideos();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> _syncClipWithVideoId(VideoItem clip, int videoId) async {
+    final clipData = await _buildClipPayload(clip);
+    final assetUrl = await widget.localVideoRepository.uploadAsset(
+      clipData.videoFile,
+    );
+    final thumbUrl = await widget.localVideoRepository.uploadAsset(
+      clipData.thumbFile,
+    );
+    final stat = await clipData.videoFile.stat();
+
+    final payload = ClipUpsert(
+      startSec: clipData.startSec,
+      endSec: clipData.endSec,
+      assetUrl: assetUrl,
+      thumbnailPath: thumbUrl,
+      captionText: clipData.hook,
+      fileSizeBytes: stat.size,
+    );
+
+    await widget.localVideoRepository.createClipForVideo(videoId, payload);
+  }
+
+  Future<_ClipPayload> _buildClipPayload(VideoItem clip) async {
+    final metaFile = File('${clip.file.path}.meta.json');
+    int? startSec;
+    int? endSec;
+    String? hook;
+    if (await metaFile.exists()) {
+      try {
+        final meta =
+            jsonDecode(await metaFile.readAsString()) as Map<String, dynamic>;
+        startSec = meta['start_sec'] as int?;
+        endSec = meta['end_sec'] as int?;
+        hook = meta['hook'] as String?;
+      } catch (_) {}
+    }
+
+    if (startSec == null || endSec == null) {
+      final name = p.basenameWithoutExtension(clip.file.path);
+      final parts = name.split('_').where((p) => p.isNotEmpty).toList();
+      if (parts.length >= 3) {
+        final maybeEnd = int.tryParse(parts[parts.length - 2]);
+        final maybeStart = int.tryParse(parts[parts.length - 3]);
+        if (maybeStart != null && maybeEnd != null) {
+          startSec = maybeStart;
+          endSec = maybeEnd;
+        }
+      }
+    }
+
+    if (startSec == null || endSec == null) {
+      throw Exception(
+        'Clip ${clip.file.path} is missing start/end metadata; cannot sync.',
+      );
+    }
+
+    hook ??= clip.title ?? p.basenameWithoutExtension(clip.file.path);
+
+    final thumbPath = '${clip.file.path}.jpg';
+    final thumbFile = File(thumbPath);
+    if (!await thumbFile.exists()) {
+      await widget.localVideoRepository.runner.generateThumbnail(
+        clip.file.path,
+        thumbPath,
+      );
+    }
+
+    return _ClipPayload(
+      startSec: startSec,
+      endSec: endSec,
+      hook: hook,
+      videoFile: clip.file,
+      thumbFile: thumbFile,
+    );
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   Future<void> _loadVideos() async {
     setState(() {
       _loading = true;
@@ -66,6 +223,9 @@ class _DashboardPageState extends State<DashboardPage> {
       final key =
           video.parentBasename ?? p.basenameWithoutExtension(video.file.path);
       grouped.putIfAbsent(key, () => []).add(video);
+      if (!video.isClip && video.backendId != null) {
+        _groupBackendIds[key] = video.backendId!;
+      }
     }
 
     if (mounted) {
@@ -413,6 +573,7 @@ class _DashboardPageState extends State<DashboardPage> {
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ExpansionTile(
+        key: PageStorageKey(groupKey),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         collapsedShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -450,11 +611,35 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               const SizedBox(width: 8),
               TextButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (context) => VideoPlayerPage(
+                        videoPath: sourceVideo.file.path,
+                        repository: widget.localVideoRepository,
+                        enableEditing: true,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.timeline),
+                label: const Text('Edit Clips'),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
                 onPressed: () async {
-                  await _autoCreateClipsFromHighlights(sourceVideo);
+                  await _autoCreateClipsFromHighlights(groupKey, sourceVideo);
                 },
                 icon: const Icon(Icons.content_cut),
                 label: const Text('Quick Clip'),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () async {
+                  await _syncAllForVideo(sourceVideo, clips, groupKey);
+                },
+                icon: const Icon(Icons.cloud_upload_outlined),
+                label: const Text('Sync All'),
               ),
               const SizedBox(width: 8),
               TextButton.icon(
@@ -477,7 +662,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             )
           else
-            ...clips.map((clip) => _buildClipRow(context, clip)),
+            ...clips.map((clip) => _buildClipRow(context, clip, groupKey)),
         ],
       ),
     );
@@ -510,7 +695,7 @@ class _DashboardPageState extends State<DashboardPage> {
           );
   }
 
-  Widget _buildClipRow(BuildContext context, VideoItem clip) {
+  Widget _buildClipRow(BuildContext context, VideoItem clip, String groupKey) {
     final stat = clip.file.statSync();
     final sizeMb = (stat.size / (1024 * 1024)).toStringAsFixed(1);
     // Prefer the title; fallback to filename.
@@ -538,7 +723,26 @@ class _DashboardPageState extends State<DashboardPage> {
               );
             },
           ),
-          // Clips should not be synced as standalone videos; action removed.
+          IconButton(
+            icon: const Icon(Icons.cloud_upload_outlined),
+            tooltip: 'Sync Clip',
+            onPressed: () async {
+              try {
+                await _syncSingleClip(clip, sourceKey: groupKey);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Clip synced successfully')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Sync failed: $e')));
+                }
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: () => _deleteVideo(clip.file.path),
@@ -669,7 +873,10 @@ class _DashboardPageState extends State<DashboardPage> {
     return int.tryParse(durationLabel) ?? 0;
   }
 
-  Future<void> _autoCreateClipsFromHighlights(VideoItem sourceVideo) async {
+  Future<void> _autoCreateClipsFromHighlights(
+    String groupKey,
+    VideoItem sourceVideo,
+  ) async {
     if (_isAutoClipping) return;
 
     setState(() {
@@ -692,11 +899,9 @@ class _DashboardPageState extends State<DashboardPage> {
         return;
       }
 
-      final durationSeconds = _durationSeconds(
+      var effectiveDuration = _durationSeconds(
         sourceVideo.duration,
       ).clamp(1, 24 * 3600);
-
-      var effectiveDuration = durationSeconds;
       if (effectiveDuration <= 1) {
         final probed = await widget.localVideoRepository.probeDurationSeconds(
           sourceVideo.file.path,
@@ -739,11 +944,7 @@ class _DashboardPageState extends State<DashboardPage> {
       }
 
       final clips = highlightResult.clips;
-      final cappedClips = highlightResult.maxClips != null
-          ? clips.take(highlightResult.maxClips!).toList()
-          : clips;
-
-      if (cappedClips.isEmpty) {
+      if (clips.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -754,14 +955,13 @@ class _DashboardPageState extends State<DashboardPage> {
         return;
       }
 
-      final video = await widget.localVideoRepository.syncVideo(sourceVideo);
-      final videoId = video.id;
+      final videoId = await _ensureBackendVideo(groupKey, sourceVideo);
 
-      _autoClipTotal = cappedClips.length;
+      _autoClipTotal = clips.length;
       var successCount = 0;
 
-      for (var i = 0; i < cappedClips.length; i++) {
-        final clip = cappedClips[i];
+      for (var i = 0; i < clips.length; i++) {
+        final clip = clips[i];
         setState(() {
           _autoClipStatus =
               'Rendering clip ${i + 1} (${clip.startSec}-${clip.endSec}s)';
@@ -827,13 +1027,30 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final outputFile = File(outputPath);
     final thumbFile = File(thumbPath);
+    final parentBase = p.basenameWithoutExtension(sourceVideo.file.path);
+    final clipDuration = Duration(
+      seconds: suggestion.endSec - suggestion.startSec,
+    );
+
+    // Write meta early to keep grouping even if uploads fail.
+    final metaFile = File('$outputPath.meta.json');
+    final meta = {
+      'title': suggestion.hook,
+      'is_clip': true,
+      'parent_basename': parentBase,
+      'duration':
+          '${clipDuration.inMinutes}:'
+          '${(clipDuration.inSeconds % 60).toString().padLeft(2, '0')}',
+      'start_sec': suggestion.startSec,
+      'end_sec': suggestion.endSec,
+      'hook': suggestion.hook,
+    };
+    await metaFile.writeAsString(jsonEncode(meta));
+
     final assetUrl = await widget.localVideoRepository.uploadAsset(outputFile);
     final thumbUrl = await widget.localVideoRepository.uploadAsset(thumbFile);
 
     final stat = await outputFile.stat();
-    final clipDuration = Duration(
-      seconds: suggestion.endSec - suggestion.startSec,
-    );
 
     final clip = ClipUpsert(
       startSec: suggestion.startSec,
@@ -845,18 +1062,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
 
     await widget.localVideoRepository.createClipForVideo(videoId, clip);
-
-    final metaFile = File('$outputPath.meta.json');
-    final parentBase = p.basenameWithoutExtension(sourceVideo.file.path);
-    final meta = {
-      'title': suggestion.hook,
-      'is_clip': true,
-      'parent_basename': parentBase,
-      'duration':
-          '${clipDuration.inMinutes}:'
-          '${(clipDuration.inSeconds % 60).toString().padLeft(2, '0')}',
-    };
-    await metaFile.writeAsString(jsonEncode(meta));
   }
 
   Widget _chip(BuildContext context, IconData icon, String label) {
@@ -872,4 +1077,20 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
   }
+}
+
+class _ClipPayload {
+  _ClipPayload({
+    required this.startSec,
+    required this.endSec,
+    required this.hook,
+    required this.videoFile,
+    required this.thumbFile,
+  });
+
+  final int startSec;
+  final int endSec;
+  final String hook;
+  final File videoFile;
+  final File thumbFile;
 }

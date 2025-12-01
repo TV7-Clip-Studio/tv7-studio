@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -17,23 +18,35 @@ part 'you_tube_ingest_request.g.dart';
 )
 class YouTubeIngestRequest {
   /// Returns a new [YouTubeIngestRequest] instance.
-  YouTubeIngestRequest({required this.youtubeUrl, this.appendClips = false});
+  YouTubeIngestRequest({
+    this.appendClips = false,
+    required this.youtubeUrl,
+  });
 
-  @JsonKey(name: r'youtube_url', required: true)
-  final String youtubeUrl;
-
-  @JsonKey(defaultValue: false, name: r'append_clips', required: false)
+  @JsonKey(
+    defaultValue: false,
+    name: r'append_clips',
+    required: false,
+    includeIfNull: false,
+  )
   final bool? appendClips;
+
+  @JsonKey(
+    name: r'youtube_url',
+    required: true,
+    includeIfNull: false,
+  )
+  final String youtubeUrl;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is YouTubeIngestRequest &&
-          other.youtubeUrl == youtubeUrl &&
-          other.appendClips == appendClips;
+          other.appendClips == appendClips &&
+          other.youtubeUrl == youtubeUrl;
 
   @override
-  int get hashCode => youtubeUrl.hashCode + appendClips.hashCode;
+  int get hashCode => appendClips.hashCode + youtubeUrl.hashCode;
 
   factory YouTubeIngestRequest.fromJson(Map<String, dynamic> json) =>
       _$YouTubeIngestRequestFromJson(json);

@@ -1,3 +1,5 @@
+// @dart=3.4
+// @dart=3.4
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'login_request.dart';
@@ -17,7 +19,10 @@ abstract class _$LoginRequestCWProxy {
   /// ```dart
   /// LoginRequest(...).copyWith(id: 12, name: "My name")
   /// ````
-  LoginRequest call({String email, String password});
+  LoginRequest call({
+    String? email,
+    String? password,
+  });
 }
 
 /// Proxy class for `copyWith` functionality. This is a callable class and can be used as follows: `instanceOfLoginRequest.copyWith(...)`. Additionally contains functions for specific fields e.g. `instanceOfLoginRequest.copyWith.fieldName(...)`
@@ -33,6 +38,7 @@ class _$LoginRequestCWProxyImpl implements _$LoginRequestCWProxy {
   LoginRequest password(String password) => this(password: password);
 
   @override
+
   /// This function **does support** nullification of nullable fields. All `null` values passed to `non-nullable` fields will be ignored. You can also use `LoginRequest(...).copyWith.fieldName(...)` to override fields one at a time with nullification support.
   ///
   /// Usage
@@ -44,11 +50,11 @@ class _$LoginRequestCWProxyImpl implements _$LoginRequestCWProxy {
     Object? password = const $CopyWithPlaceholder(),
   }) {
     return LoginRequest(
-      email: email == const $CopyWithPlaceholder()
+      email: email == const $CopyWithPlaceholder() || email == null
           ? _value.email
           // ignore: cast_nullable_to_non_nullable
           : email as String,
-      password: password == const $CopyWithPlaceholder()
+      password: password == const $CopyWithPlaceholder() || password == null
           ? _value.password
           // ignore: cast_nullable_to_non_nullable
           : password as String,
@@ -67,14 +73,24 @@ extension $LoginRequestCopyWith on LoginRequest {
 // **************************************************************************
 
 LoginRequest _$LoginRequestFromJson(Map<String, dynamic> json) =>
-    $checkedCreate('LoginRequest', json, ($checkedConvert) {
-      $checkKeys(json, requiredKeys: const ['email', 'password']);
-      final val = LoginRequest(
-        email: $checkedConvert('email', (v) => v as String),
-        password: $checkedConvert('password', (v) => v as String),
-      );
-      return val;
-    });
+    $checkedCreate(
+      'LoginRequest',
+      json,
+      ($checkedConvert) {
+        $checkKeys(
+          json,
+          requiredKeys: const ['email', 'password'],
+        );
+        final val = LoginRequest(
+          email: $checkedConvert('email', (v) => v as String),
+          password: $checkedConvert('password', (v) => v as String),
+        );
+        return val;
+      },
+    );
 
 Map<String, dynamic> _$LoginRequestToJson(LoginRequest instance) =>
-    <String, dynamic>{'email': instance.email, 'password': instance.password};
+    <String, dynamic>{
+      'email': instance.email,
+      'password': instance.password,
+    };

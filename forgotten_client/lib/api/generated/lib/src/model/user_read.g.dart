@@ -1,3 +1,4 @@
+// @dart=3.4
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'user_read.dart';
@@ -7,15 +8,21 @@ part of 'user_read.dart';
 // **************************************************************************
 
 abstract class _$UserReadCWProxy {
-  UserRead id(int id);
+  UserRead createdAt(DateTime createdAt);
 
   UserRead email(String email);
 
   UserRead fullName(String fullName);
 
+  UserRead id(int id);
+
   UserRead isActive(bool isActive);
 
-  UserRead createdAt(DateTime createdAt);
+  UserRead plan(PlanType plan);
+
+  UserRead trialExpiresAt(DateTime? trialExpiresAt);
+
+  UserRead trialStartedAt(DateTime? trialStartedAt);
 
   UserRead updatedAt(DateTime updatedAt);
 
@@ -26,12 +33,15 @@ abstract class _$UserReadCWProxy {
   /// UserRead(...).copyWith(id: 12, name: "My name")
   /// ````
   UserRead call({
-    int id,
-    String email,
-    String fullName,
-    bool isActive,
-    DateTime createdAt,
-    DateTime updatedAt,
+    DateTime? createdAt,
+    String? email,
+    String? fullName,
+    int? id,
+    bool? isActive,
+    PlanType? plan,
+    DateTime? trialExpiresAt,
+    DateTime? trialStartedAt,
+    DateTime? updatedAt,
   });
 }
 
@@ -42,7 +52,7 @@ class _$UserReadCWProxyImpl implements _$UserReadCWProxy {
   final UserRead _value;
 
   @override
-  UserRead id(int id) => this(id: id);
+  UserRead createdAt(DateTime createdAt) => this(createdAt: createdAt);
 
   @override
   UserRead email(String email) => this(email: email);
@@ -51,15 +61,27 @@ class _$UserReadCWProxyImpl implements _$UserReadCWProxy {
   UserRead fullName(String fullName) => this(fullName: fullName);
 
   @override
+  UserRead id(int id) => this(id: id);
+
+  @override
   UserRead isActive(bool isActive) => this(isActive: isActive);
 
   @override
-  UserRead createdAt(DateTime createdAt) => this(createdAt: createdAt);
+  UserRead plan(PlanType plan) => this(plan: plan);
+
+  @override
+  UserRead trialExpiresAt(DateTime? trialExpiresAt) =>
+      this(trialExpiresAt: trialExpiresAt);
+
+  @override
+  UserRead trialStartedAt(DateTime? trialStartedAt) =>
+      this(trialStartedAt: trialStartedAt);
 
   @override
   UserRead updatedAt(DateTime updatedAt) => this(updatedAt: updatedAt);
 
   @override
+
   /// This function **does support** nullification of nullable fields. All `null` values passed to `non-nullable` fields will be ignored. You can also use `UserRead(...).copyWith.fieldName(...)` to override fields one at a time with nullification support.
   ///
   /// Usage
@@ -67,35 +89,50 @@ class _$UserReadCWProxyImpl implements _$UserReadCWProxy {
   /// UserRead(...).copyWith(id: 12, name: "My name")
   /// ````
   UserRead call({
-    Object? id = const $CopyWithPlaceholder(),
+    Object? createdAt = const $CopyWithPlaceholder(),
     Object? email = const $CopyWithPlaceholder(),
     Object? fullName = const $CopyWithPlaceholder(),
+    Object? id = const $CopyWithPlaceholder(),
     Object? isActive = const $CopyWithPlaceholder(),
-    Object? createdAt = const $CopyWithPlaceholder(),
+    Object? plan = const $CopyWithPlaceholder(),
+    Object? trialExpiresAt = const $CopyWithPlaceholder(),
+    Object? trialStartedAt = const $CopyWithPlaceholder(),
     Object? updatedAt = const $CopyWithPlaceholder(),
   }) {
     return UserRead(
-      id: id == const $CopyWithPlaceholder()
-          ? _value.id
-          // ignore: cast_nullable_to_non_nullable
-          : id as int,
-      email: email == const $CopyWithPlaceholder()
-          ? _value.email
-          // ignore: cast_nullable_to_non_nullable
-          : email as String,
-      fullName: fullName == const $CopyWithPlaceholder()
-          ? _value.fullName
-          // ignore: cast_nullable_to_non_nullable
-          : fullName as String,
-      isActive: isActive == const $CopyWithPlaceholder()
-          ? _value.isActive
-          // ignore: cast_nullable_to_non_nullable
-          : isActive as bool,
-      createdAt: createdAt == const $CopyWithPlaceholder()
+      createdAt: createdAt == const $CopyWithPlaceholder() || createdAt == null
           ? _value.createdAt
           // ignore: cast_nullable_to_non_nullable
           : createdAt as DateTime,
-      updatedAt: updatedAt == const $CopyWithPlaceholder()
+      email: email == const $CopyWithPlaceholder() || email == null
+          ? _value.email
+          // ignore: cast_nullable_to_non_nullable
+          : email as String,
+      fullName: fullName == const $CopyWithPlaceholder() || fullName == null
+          ? _value.fullName
+          // ignore: cast_nullable_to_non_nullable
+          : fullName as String,
+      id: id == const $CopyWithPlaceholder() || id == null
+          ? _value.id
+          // ignore: cast_nullable_to_non_nullable
+          : id as int,
+      isActive: isActive == const $CopyWithPlaceholder() || isActive == null
+          ? _value.isActive
+          // ignore: cast_nullable_to_non_nullable
+          : isActive as bool,
+      plan: plan == const $CopyWithPlaceholder() || plan == null
+          ? _value.plan
+          // ignore: cast_nullable_to_non_nullable
+          : plan as PlanType,
+      trialExpiresAt: trialExpiresAt == const $CopyWithPlaceholder()
+          ? _value.trialExpiresAt
+          // ignore: cast_nullable_to_non_nullable
+          : trialExpiresAt as DateTime?,
+      trialStartedAt: trialStartedAt == const $CopyWithPlaceholder()
+          ? _value.trialStartedAt
+          // ignore: cast_nullable_to_non_nullable
+          : trialStartedAt as DateTime?,
+      updatedAt: updatedAt == const $CopyWithPlaceholder() || updatedAt == null
           ? _value.updatedAt
           // ignore: cast_nullable_to_non_nullable
           : updatedAt as DateTime,
@@ -114,49 +151,73 @@ extension $UserReadCopyWith on UserRead {
 // **************************************************************************
 
 UserRead _$UserReadFromJson(Map<String, dynamic> json) => $checkedCreate(
-  'UserRead',
-  json,
-  ($checkedConvert) {
-    $checkKeys(
+      'UserRead',
       json,
-      requiredKeys: const [
-        'id',
-        'email',
-        'full_name',
-        'is_active',
-        'created_at',
-        'updated_at',
-      ],
+      ($checkedConvert) {
+        $checkKeys(
+          json,
+          requiredKeys: const [
+            'created_at',
+            'email',
+            'full_name',
+            'id',
+            'is_active',
+            'plan',
+            'updated_at'
+          ],
+        );
+        final val = UserRead(
+          createdAt:
+              $checkedConvert('created_at', (v) => DateTime.parse(v as String)),
+          email: $checkedConvert('email', (v) => v as String),
+          fullName: $checkedConvert('full_name', (v) => v as String),
+          id: $checkedConvert('id', (v) => (v as num).toInt()),
+          isActive: $checkedConvert('is_active', (v) => v as bool),
+          plan:
+              $checkedConvert('plan', (v) => $enumDecode(_$PlanTypeEnumMap, v)),
+          trialExpiresAt: $checkedConvert('trial_expires_at',
+              (v) => v == null ? null : DateTime.parse(v as String)),
+          trialStartedAt: $checkedConvert('trial_started_at',
+              (v) => v == null ? null : DateTime.parse(v as String)),
+          updatedAt:
+              $checkedConvert('updated_at', (v) => DateTime.parse(v as String)),
+        );
+        return val;
+      },
+      fieldKeyMap: const {
+        'createdAt': 'created_at',
+        'fullName': 'full_name',
+        'isActive': 'is_active',
+        'trialExpiresAt': 'trial_expires_at',
+        'trialStartedAt': 'trial_started_at',
+        'updatedAt': 'updated_at'
+      },
     );
-    final val = UserRead(
-      id: $checkedConvert('id', (v) => (v as num).toInt()),
-      email: $checkedConvert('email', (v) => v as String),
-      fullName: $checkedConvert('full_name', (v) => v as String),
-      isActive: $checkedConvert('is_active', (v) => v as bool),
-      createdAt: $checkedConvert(
-        'created_at',
-        (v) => DateTime.parse(v as String),
-      ),
-      updatedAt: $checkedConvert(
-        'updated_at',
-        (v) => DateTime.parse(v as String),
-      ),
-    );
-    return val;
-  },
-  fieldKeyMap: const {
-    'fullName': 'full_name',
-    'isActive': 'is_active',
-    'createdAt': 'created_at',
-    'updatedAt': 'updated_at',
-  },
-);
 
-Map<String, dynamic> _$UserReadToJson(UserRead instance) => <String, dynamic>{
-  'id': instance.id,
-  'email': instance.email,
-  'full_name': instance.fullName,
-  'is_active': instance.isActive,
-  'created_at': instance.createdAt.toIso8601String(),
-  'updated_at': instance.updatedAt.toIso8601String(),
+Map<String, dynamic> _$UserReadToJson(UserRead instance) {
+  final val = <String, dynamic>{
+    'created_at': instance.createdAt.toIso8601String(),
+    'email': instance.email,
+    'full_name': instance.fullName,
+    'id': instance.id,
+    'is_active': instance.isActive,
+    'plan': _$PlanTypeEnumMap[instance.plan]!,
+  };
+
+  void writeNotNull(String key, dynamic value) {
+    if (value != null) {
+      val[key] = value;
+    }
+  }
+
+  writeNotNull('trial_expires_at', instance.trialExpiresAt?.toIso8601String());
+  writeNotNull('trial_started_at', instance.trialStartedAt?.toIso8601String());
+  val['updated_at'] = instance.updatedAt.toIso8601String();
+  return val;
+}
+
+const _$PlanTypeEnumMap = {
+  PlanType.trial: 'trial',
+  PlanType.core: 'core',
+  PlanType.pro: 'pro',
 };

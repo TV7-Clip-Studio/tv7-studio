@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -40,10 +41,16 @@ class ConfigApi {
     final _path = r'/api/v1/config';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{...?headers},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
         ],
         ...?extra,
       },
@@ -64,11 +71,8 @@ class ConfigApi {
       final rawData = _response.data;
       _responseData = rawData == null
           ? null
-          : deserialize<ConfigRead, ConfigRead>(
-              rawData,
-              'ConfigRead',
-              growable: true,
-            );
+          : deserialize<ConfigRead, ConfigRead>(rawData, 'ConfigRead',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,

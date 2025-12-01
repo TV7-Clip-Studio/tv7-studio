@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -17,12 +18,23 @@ part 'login_request.g.dart';
 )
 class LoginRequest {
   /// Returns a new [LoginRequest] instance.
-  LoginRequest({required this.email, required this.password});
+  LoginRequest({
+    required this.email,
+    required this.password,
+  });
 
-  @JsonKey(name: r'email', required: true)
+  @JsonKey(
+    name: r'email',
+    required: true,
+    includeIfNull: false,
+  )
   final String email;
 
-  @JsonKey(name: r'password', required: true)
+  @JsonKey(
+    name: r'password',
+    required: true,
+    includeIfNull: false,
+  )
   final String password;
 
   @override

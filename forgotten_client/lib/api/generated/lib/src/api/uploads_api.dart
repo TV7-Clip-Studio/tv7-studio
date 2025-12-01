@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -43,10 +44,16 @@ class UploadsApi {
     final _path = r'/api/v1/uploads/assets';
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{...?headers},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
         ],
         ...?extra,
       },
@@ -56,11 +63,12 @@ class UploadsApi {
 
     dynamic _bodyData;
 
-    try {
-      _bodyData = FormData.fromMap(<String, dynamic>{'file': file});
-    } catch (error, stackTrace) {
+    try {} catch (error, stackTrace) {
       throw DioException(
-        requestOptions: _options.compose(_dio.options, _path),
+        requestOptions: _options.compose(
+          _dio.options,
+          _path,
+        ),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -83,10 +91,8 @@ class UploadsApi {
       _responseData = rawData == null
           ? null
           : deserialize<AssetUploadResponse, AssetUploadResponse>(
-              rawData,
-              'AssetUploadResponse',
-              growable: true,
-            );
+              rawData, 'AssetUploadResponse',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,

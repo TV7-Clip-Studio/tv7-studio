@@ -1,3 +1,4 @@
+// @dart=3.4
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'asset_upload_response.dart';
@@ -7,11 +8,11 @@ part of 'asset_upload_response.dart';
 // **************************************************************************
 
 abstract class _$AssetUploadResponseCWProxy {
-  AssetUploadResponse assetUrl(String assetUrl);
-
   AssetUploadResponse assetChecksum(String assetChecksum);
 
   AssetUploadResponse assetSizeBytes(int assetSizeBytes);
+
+  AssetUploadResponse assetUrl(String assetUrl);
 
   AssetUploadResponse contentType(String? contentType);
 
@@ -22,9 +23,9 @@ abstract class _$AssetUploadResponseCWProxy {
   /// AssetUploadResponse(...).copyWith(id: 12, name: "My name")
   /// ````
   AssetUploadResponse call({
-    String assetUrl,
-    String assetChecksum,
-    int assetSizeBytes,
+    String? assetChecksum,
+    int? assetSizeBytes,
+    String? assetUrl,
     String? contentType,
   });
 }
@@ -36,9 +37,6 @@ class _$AssetUploadResponseCWProxyImpl implements _$AssetUploadResponseCWProxy {
   final AssetUploadResponse _value;
 
   @override
-  AssetUploadResponse assetUrl(String assetUrl) => this(assetUrl: assetUrl);
-
-  @override
   AssetUploadResponse assetChecksum(String assetChecksum) =>
       this(assetChecksum: assetChecksum);
 
@@ -47,10 +45,14 @@ class _$AssetUploadResponseCWProxyImpl implements _$AssetUploadResponseCWProxy {
       this(assetSizeBytes: assetSizeBytes);
 
   @override
+  AssetUploadResponse assetUrl(String assetUrl) => this(assetUrl: assetUrl);
+
+  @override
   AssetUploadResponse contentType(String? contentType) =>
       this(contentType: contentType);
 
   @override
+
   /// This function **does support** nullification of nullable fields. All `null` values passed to `non-nullable` fields will be ignored. You can also use `AssetUploadResponse(...).copyWith.fieldName(...)` to override fields one at a time with nullification support.
   ///
   /// Usage
@@ -58,24 +60,26 @@ class _$AssetUploadResponseCWProxyImpl implements _$AssetUploadResponseCWProxy {
   /// AssetUploadResponse(...).copyWith(id: 12, name: "My name")
   /// ````
   AssetUploadResponse call({
-    Object? assetUrl = const $CopyWithPlaceholder(),
     Object? assetChecksum = const $CopyWithPlaceholder(),
     Object? assetSizeBytes = const $CopyWithPlaceholder(),
+    Object? assetUrl = const $CopyWithPlaceholder(),
     Object? contentType = const $CopyWithPlaceholder(),
   }) {
     return AssetUploadResponse(
-      assetUrl: assetUrl == const $CopyWithPlaceholder()
-          ? _value.assetUrl
-          // ignore: cast_nullable_to_non_nullable
-          : assetUrl as String,
-      assetChecksum: assetChecksum == const $CopyWithPlaceholder()
-          ? _value.assetChecksum
-          // ignore: cast_nullable_to_non_nullable
-          : assetChecksum as String,
-      assetSizeBytes: assetSizeBytes == const $CopyWithPlaceholder()
+      assetChecksum:
+          assetChecksum == const $CopyWithPlaceholder() || assetChecksum == null
+              ? _value.assetChecksum
+              // ignore: cast_nullable_to_non_nullable
+              : assetChecksum as String,
+      assetSizeBytes: assetSizeBytes == const $CopyWithPlaceholder() ||
+              assetSizeBytes == null
           ? _value.assetSizeBytes
           // ignore: cast_nullable_to_non_nullable
           : assetSizeBytes as int,
+      assetUrl: assetUrl == const $CopyWithPlaceholder() || assetUrl == null
+          ? _value.assetUrl
+          // ignore: cast_nullable_to_non_nullable
+          : assetUrl as String,
       contentType: contentType == const $CopyWithPlaceholder()
           ? _value.contentType
           // ignore: cast_nullable_to_non_nullable
@@ -103,35 +107,41 @@ AssetUploadResponse _$AssetUploadResponseFromJson(Map<String, dynamic> json) =>
         $checkKeys(
           json,
           requiredKeys: const [
-            'asset_url',
             'asset_checksum',
             'asset_size_bytes',
+            'asset_url'
           ],
         );
         final val = AssetUploadResponse(
-          assetUrl: $checkedConvert('asset_url', (v) => v as String),
           assetChecksum: $checkedConvert('asset_checksum', (v) => v as String),
-          assetSizeBytes: $checkedConvert(
-            'asset_size_bytes',
-            (v) => (v as num).toInt(),
-          ),
+          assetSizeBytes:
+              $checkedConvert('asset_size_bytes', (v) => (v as num).toInt()),
+          assetUrl: $checkedConvert('asset_url', (v) => v as String),
           contentType: $checkedConvert('content_type', (v) => v as String?),
         );
         return val;
       },
       fieldKeyMap: const {
-        'assetUrl': 'asset_url',
         'assetChecksum': 'asset_checksum',
         'assetSizeBytes': 'asset_size_bytes',
-        'contentType': 'content_type',
+        'assetUrl': 'asset_url',
+        'contentType': 'content_type'
       },
     );
 
-Map<String, dynamic> _$AssetUploadResponseToJson(
-  AssetUploadResponse instance,
-) => <String, dynamic>{
-  'asset_url': instance.assetUrl,
-  'asset_checksum': instance.assetChecksum,
-  'asset_size_bytes': instance.assetSizeBytes,
-  'content_type': instance.contentType,
-};
+Map<String, dynamic> _$AssetUploadResponseToJson(AssetUploadResponse instance) {
+  final val = <String, dynamic>{
+    'asset_checksum': instance.assetChecksum,
+    'asset_size_bytes': instance.assetSizeBytes,
+    'asset_url': instance.assetUrl,
+  };
+
+  void writeNotNull(String key, dynamic value) {
+    if (value != null) {
+      val[key] = value;
+    }
+  }
+
+  writeNotNull('content_type', instance.contentType);
+  return val;
+}

@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -19,105 +20,157 @@ part 'clip_upsert.g.dart';
 class ClipUpsert {
   /// Returns a new [ClipUpsert] instance.
   ClipUpsert({
-    required this.startSec,
-
-    required this.endSec,
-
-    this.localPath,
-
-    this.assetUrl,
-
     this.assetChecksum,
-
     this.assetSizeBytes,
-
-    this.readyLocalOnly = false,
-
+    this.assetUrl,
     this.captionText,
-
-    this.renderWidth,
-
-    this.renderHeight,
-
-    this.frameRate,
-
+    required this.endSec,
     this.fileSizeBytes,
-
+    this.frameRate,
+    this.localPath,
+    this.readyLocalOnly = false,
+    this.renderHeight,
+    this.renderWidth,
+    required this.startSec,
     this.status = ClipStatus.ready,
+    this.thumbnailPath,
   });
 
-  @JsonKey(name: r'start_sec', required: true)
-  final int startSec;
-
-  @JsonKey(name: r'end_sec', required: true)
-  final int endSec;
-
-  @JsonKey(name: r'local_path', required: false)
-  final String? localPath;
-
-  @JsonKey(name: r'asset_url', required: false)
-  final String? assetUrl;
-
-  @JsonKey(name: r'asset_checksum', required: false)
+  @JsonKey(
+    name: r'asset_checksum',
+    required: false,
+    includeIfNull: false,
+  )
   final String? assetChecksum;
 
-  @JsonKey(name: r'asset_size_bytes', required: false)
+  @JsonKey(
+    name: r'asset_size_bytes',
+    required: false,
+    includeIfNull: false,
+  )
   final int? assetSizeBytes;
 
-  @JsonKey(defaultValue: false, name: r'ready_local_only', required: false)
-  final bool? readyLocalOnly;
+  @JsonKey(
+    name: r'asset_url',
+    required: false,
+    includeIfNull: false,
+  )
+  final String? assetUrl;
 
-  @JsonKey(name: r'caption_text', required: false)
+  @JsonKey(
+    name: r'caption_text',
+    required: false,
+    includeIfNull: false,
+  )
   final String? captionText;
 
-  @JsonKey(name: r'render_width', required: false)
-  final int? renderWidth;
+  @JsonKey(
+    name: r'end_sec',
+    required: true,
+    includeIfNull: false,
+  )
+  final int endSec;
 
-  @JsonKey(name: r'render_height', required: false)
-  final int? renderHeight;
-
-  @JsonKey(name: r'frame_rate', required: false)
-  final num? frameRate;
-
-  @JsonKey(name: r'file_size_bytes', required: false)
+  @JsonKey(
+    name: r'file_size_bytes',
+    required: false,
+    includeIfNull: false,
+  )
   final int? fileSizeBytes;
 
-  @JsonKey(defaultValue: ClipStatus.ready, name: r'status', required: false)
+  @JsonKey(
+    name: r'frame_rate',
+    required: false,
+    includeIfNull: false,
+  )
+  final num? frameRate;
+
+  @JsonKey(
+    name: r'local_path',
+    required: false,
+    includeIfNull: false,
+  )
+  final String? localPath;
+
+  @JsonKey(
+    defaultValue: false,
+    name: r'ready_local_only',
+    required: false,
+    includeIfNull: false,
+  )
+  final bool? readyLocalOnly;
+
+  @JsonKey(
+    name: r'render_height',
+    required: false,
+    includeIfNull: false,
+  )
+  final int? renderHeight;
+
+  @JsonKey(
+    name: r'render_width',
+    required: false,
+    includeIfNull: false,
+  )
+  final int? renderWidth;
+
+  @JsonKey(
+    name: r'start_sec',
+    required: true,
+    includeIfNull: false,
+  )
+  final int startSec;
+
+  @JsonKey(
+    defaultValue: ClipStatus.ready,
+    name: r'status',
+    required: false,
+    includeIfNull: false,
+  )
   final ClipStatus? status;
+
+  @JsonKey(
+    name: r'thumbnail_path',
+    required: false,
+    includeIfNull: false,
+  )
+  final String? thumbnailPath;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ClipUpsert &&
-          other.startSec == startSec &&
-          other.endSec == endSec &&
-          other.localPath == localPath &&
-          other.assetUrl == assetUrl &&
           other.assetChecksum == assetChecksum &&
           other.assetSizeBytes == assetSizeBytes &&
-          other.readyLocalOnly == readyLocalOnly &&
+          other.assetUrl == assetUrl &&
           other.captionText == captionText &&
-          other.renderWidth == renderWidth &&
-          other.renderHeight == renderHeight &&
-          other.frameRate == frameRate &&
+          other.endSec == endSec &&
           other.fileSizeBytes == fileSizeBytes &&
-          other.status == status;
+          other.frameRate == frameRate &&
+          other.localPath == localPath &&
+          other.readyLocalOnly == readyLocalOnly &&
+          other.renderHeight == renderHeight &&
+          other.renderWidth == renderWidth &&
+          other.startSec == startSec &&
+          other.status == status &&
+          other.thumbnailPath == thumbnailPath;
 
   @override
   int get hashCode =>
-      startSec.hashCode +
-      endSec.hashCode +
-      (localPath == null ? 0 : localPath.hashCode) +
-      (assetUrl == null ? 0 : assetUrl.hashCode) +
       (assetChecksum == null ? 0 : assetChecksum.hashCode) +
       (assetSizeBytes == null ? 0 : assetSizeBytes.hashCode) +
-      readyLocalOnly.hashCode +
+      (assetUrl == null ? 0 : assetUrl.hashCode) +
       (captionText == null ? 0 : captionText.hashCode) +
-      (renderWidth == null ? 0 : renderWidth.hashCode) +
-      (renderHeight == null ? 0 : renderHeight.hashCode) +
-      (frameRate == null ? 0 : frameRate.hashCode) +
+      endSec.hashCode +
       (fileSizeBytes == null ? 0 : fileSizeBytes.hashCode) +
-      status.hashCode;
+      (frameRate == null ? 0 : frameRate.hashCode) +
+      (localPath == null ? 0 : localPath.hashCode) +
+      readyLocalOnly.hashCode +
+      (renderHeight == null ? 0 : renderHeight.hashCode) +
+      (renderWidth == null ? 0 : renderWidth.hashCode) +
+      startSec.hashCode +
+      status.hashCode +
+      (thumbnailPath == null ? 0 : thumbnailPath.hashCode);
 
   factory ClipUpsert.fromJson(Map<String, dynamic> json) =>
       _$ClipUpsertFromJson(json);

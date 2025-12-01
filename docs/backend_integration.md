@@ -1,48 +1,33 @@
-# Backend Coordination (forgotten-app FastAPI)
+# Backend Integration (FastAPI control plane)
 
-Goal: align the existing FastAPI ingest/pipeline with the Flutter client so responsibilities are clear and the API contract is stable.
+Source of truth: `docs/tv7_high_architecture.md`. This doc maps the FastAPI contract the Flutter app depends on (Core + Pro) and the OpenAPI expectations.
 
-## Ownership split
-- Client (Flutter): ingest (yt-dlp/import), normalize/render via ffmpeg, optional local transcript/highlights, workspace management, retries/logging, secure storage of user keys.
-- Backend (FastAPI): auth/JWT, metadata/status source of truth, feature flags/config, optional cloud transcript/highlights via OpenAI, optional asset upload/publishing, rate limiting/validation.
+## Required Endpoints
+- **Auth & licensing**: register, login, trial validation, activation key, license issuance/refresh. Response includes signed license token with `plan` and `expires_at` for offline use.
+- **Config**: feature flags + limits (publishing enabled, platforms, size limits, OpenAI policy/local-vs-cloud rule).
+- **Clip suggestion**: transcript (+ optional prompt) → list of segments with start/end/title/description/hook; deterministic schema in OpenAPI.
+- **Uploads (Pro)**: asset upload endpoint or signed-URL negotiation; returns `asset_url` and metadata for schedule creation.
+- **Videos/clips**: local video registration, clip upsert (with `asset_url`, timings, captions).
+- **Scheduling (Pro)**: create/read/list scheduled posts with `status` (`draft|scheduled|posted|failed`), `publish_at`, per-platform results, error logs, retries.
+- **Dashboard/Web**: endpoints backing the minimal Pro dashboard for OAuth/social connections.
 
-## API contract (to publish)
-- OpenAPI spec exported and versioned for client generation.
-- Endpoints to confirm/adjust:
-  - Auth: login/refresh/logout.
-  - Metadata: videos/clips CRUD, status updates, transcript/highlight payloads.
-- Feature flags/config fetch.
-- Optional: rendered asset upload, publishing hooks.
+## OpenAPI Expectations
+- Publish updated spec to `forgotten_client/openapi/forgotten-app.json` with the above endpoints. Regenerate the Dart client (`lib/api/generated`) after each spec change.
+- Include enums for plan, clip status, publish status; document request/response shapes for license issuance and schedule status.
+- Keep `/api/v1/ai/highlights` (or renamed) in spec to match the client; remove ad-hoc endpoints once aligned.
 
-## Publishing contract (cloud-owned)
-See `docs/publishing_contract.md` for division of responsibilities. Summary:
-- Backend owns platform tokens, publish job orchestration, retries.
-- Client uploads assets if required (or uses signed URLs) and triggers publish; polls status.
-- If no asset is uploaded, clip stays `ready_local_only` and publish is disabled.
+## Client Responsibilities (per spec)
+- Attach auth + license token; operate offline while license valid; block when expired.
+- Respect config flags: disable publishing when off, enforce size/platform limits, follow OpenAI/local policy.
+- For Pro: upload assets, create schedules, poll status; open dashboard WebView for OAuth.
+- Send transcripts, captions, and timing metadata when registering videos/clips; handle retries/backoff on failure.
 
-## Next steps for FastAPI alignment
-- Add `/config` endpoint for feature flags (publishing_enabled, asset_upload_required, allowed platforms, size limits, OpenAI policy).
-- Add publish endpoints to OpenAPI: `POST /clips/{id}/publish`, `GET /clips/{id}/publish` (jobs/status/logs), with asset_url/checksum/size fields and status enums.
-- Define asset intake contract: signed URL issuance or direct upload endpoint; document in OpenAPI.
-- Export and commit OpenAPI spec for client generation; add Make target/script to regenerate.
-- If spec is missing, generate a fresh OpenAPI export (include auth/login/refresh, ingest, status, publish stubs, config).
-- Current gaps in exported spec (forgotten-app.json):
-  - No config/feature flags endpoint.
-  - No client-driven metadata push endpoints (for local pipeline results).
-  - No asset upload/signed-URL negotiation beyond publish request fields (asset_url/checksum/size present only in publish payload).
+## Backend coordination (Phase 1 highlights)
+- Implement `/api/v1/ai/highlights` as specced: request `{transcript, duration_seconds, prompt?, max_clips?, transcript_language?}`; response `{clips: [{start_sec, end_sec, title?, description?, hook}], max_clips?, model?}` with HTTP Bearer auth and validation.
+- Wire the endpoint to the LLM prompt/logic for clip suggestions; keep or alias `/api/v1/ai/execute` only if needed.
+- Re-export the OpenAPI after backend changes so the Dart SDK can be regenerated; keep the path/tag naming stable.
 
-## Pipeline alignment
-- Define states shared between client and backend (e.g., `ingested`, `normalized`, `rendered`, `failed`, `published`).
-- Client sends: job metadata, clip timings, transcripts/captions, highlight selections, statuses.
-- Backend responds: authoritative state, feature flags, optional cloud highlight results, publishing results/errors.
-- Reconciliation rules: server authoritative on shared fields; client retries with backoff; offline queue pushes on reconnect.
-
-## Keys/policies
-- Decide whether the client may call OpenAI directly with user-supplied keys or must use backend-provided short-lived tokens/proxy.
-- Enforce policy per flavor/environment; block or allow direct keys accordingly.
-
-## Next actions
-- Publish the current FastAPI OpenAPI spec to `forgotten_client/openapi/forgotten-app.yaml`.
-- Add/adjust endpoints for feature flags/config and (if needed) asset upload/publishing.
-- Define shared status enum and payload shapes; document in the spec.
-- Generate the Dart client and wire login/refresh; build a dashboard hitting a metadata endpoint to validate the contract.
+## Next Integration Steps
+- Add licensing/trial endpoints and scheduler endpoints to the FastAPI spec; align clip suggestion path/schema.
+- Export spec and run `make gen-api` (or `tool/generate_api.sh`) to refresh the Dart SDK.
+- Update the client to use generated APIs (minimize raw Dio calls) and wire config/licensing flows.

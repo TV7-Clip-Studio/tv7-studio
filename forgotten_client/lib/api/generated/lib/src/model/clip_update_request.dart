@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -18,77 +19,105 @@ part 'clip_update_request.g.dart';
 class ClipUpdateRequest {
   /// Returns a new [ClipUpdateRequest] instance.
   ClipUpdateRequest({
-    this.assetUrl,
-
     this.assetChecksum,
-
     this.assetSizeBytes,
-
-    this.renderWidth,
-
-    this.renderHeight,
-
-    this.frameRate,
-
-    this.fileSizeBytes,
-
+    this.assetUrl,
     this.captionText,
-
+    this.fileSizeBytes,
+    this.frameRate,
     this.readyLocalOnly,
+    this.renderHeight,
+    this.renderWidth,
   });
 
-  @JsonKey(name: r'asset_url', required: false)
-  final String? assetUrl;
-
-  @JsonKey(name: r'asset_checksum', required: false)
+  @JsonKey(
+    name: r'asset_checksum',
+    required: false,
+    includeIfNull: false,
+  )
   final String? assetChecksum;
 
-  @JsonKey(name: r'asset_size_bytes', required: false)
+  @JsonKey(
+    name: r'asset_size_bytes',
+    required: false,
+    includeIfNull: false,
+  )
   final int? assetSizeBytes;
 
-  @JsonKey(name: r'render_width', required: false)
-  final int? renderWidth;
+  @JsonKey(
+    name: r'asset_url',
+    required: false,
+    includeIfNull: false,
+  )
+  final String? assetUrl;
 
-  @JsonKey(name: r'render_height', required: false)
-  final int? renderHeight;
-
-  @JsonKey(name: r'frame_rate', required: false)
-  final num? frameRate;
-
-  @JsonKey(name: r'file_size_bytes', required: false)
-  final int? fileSizeBytes;
-
-  @JsonKey(name: r'caption_text', required: false)
+  @JsonKey(
+    name: r'caption_text',
+    required: false,
+    includeIfNull: false,
+  )
   final String? captionText;
 
-  @JsonKey(name: r'ready_local_only', required: false)
+  @JsonKey(
+    name: r'file_size_bytes',
+    required: false,
+    includeIfNull: false,
+  )
+  final int? fileSizeBytes;
+
+  @JsonKey(
+    name: r'frame_rate',
+    required: false,
+    includeIfNull: false,
+  )
+  final num? frameRate;
+
+  @JsonKey(
+    name: r'ready_local_only',
+    required: false,
+    includeIfNull: false,
+  )
   final bool? readyLocalOnly;
+
+  @JsonKey(
+    name: r'render_height',
+    required: false,
+    includeIfNull: false,
+  )
+  final int? renderHeight;
+
+  @JsonKey(
+    name: r'render_width',
+    required: false,
+    includeIfNull: false,
+  )
+  final int? renderWidth;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ClipUpdateRequest &&
-          other.assetUrl == assetUrl &&
           other.assetChecksum == assetChecksum &&
           other.assetSizeBytes == assetSizeBytes &&
-          other.renderWidth == renderWidth &&
-          other.renderHeight == renderHeight &&
-          other.frameRate == frameRate &&
-          other.fileSizeBytes == fileSizeBytes &&
+          other.assetUrl == assetUrl &&
           other.captionText == captionText &&
-          other.readyLocalOnly == readyLocalOnly;
+          other.fileSizeBytes == fileSizeBytes &&
+          other.frameRate == frameRate &&
+          other.readyLocalOnly == readyLocalOnly &&
+          other.renderHeight == renderHeight &&
+          other.renderWidth == renderWidth;
 
   @override
   int get hashCode =>
-      (assetUrl == null ? 0 : assetUrl.hashCode) +
       (assetChecksum == null ? 0 : assetChecksum.hashCode) +
       (assetSizeBytes == null ? 0 : assetSizeBytes.hashCode) +
-      (renderWidth == null ? 0 : renderWidth.hashCode) +
-      (renderHeight == null ? 0 : renderHeight.hashCode) +
-      (frameRate == null ? 0 : frameRate.hashCode) +
-      (fileSizeBytes == null ? 0 : fileSizeBytes.hashCode) +
+      (assetUrl == null ? 0 : assetUrl.hashCode) +
       (captionText == null ? 0 : captionText.hashCode) +
-      (readyLocalOnly == null ? 0 : readyLocalOnly.hashCode);
+      (fileSizeBytes == null ? 0 : fileSizeBytes.hashCode) +
+      (frameRate == null ? 0 : frameRate.hashCode) +
+      (readyLocalOnly == null ? 0 : readyLocalOnly.hashCode) +
+      (renderHeight == null ? 0 : renderHeight.hashCode) +
+      (renderWidth == null ? 0 : renderWidth.hashCode);
 
   factory ClipUpdateRequest.fromJson(Map<String, dynamic> json) =>
       _$ClipUpdateRequestFromJson(json);

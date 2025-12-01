@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -19,41 +20,55 @@ class AIRequest {
   /// Returns a new [AIRequest] instance.
   AIRequest({
     this.agentId = 'default',
-
-    required this.input,
-
-    this.sessionId,
-
     this.context,
+    required this.input,
+    this.sessionId,
   });
 
-  @JsonKey(defaultValue: 'default', name: r'agent_id', required: false)
+  @JsonKey(
+    defaultValue: 'default',
+    name: r'agent_id',
+    required: false,
+    includeIfNull: false,
+  )
   final String? agentId;
 
-  @JsonKey(name: r'input', required: true)
+  @JsonKey(
+    name: r'context',
+    required: false,
+    includeIfNull: false,
+  )
+  final Map<String, Object>? context;
+
+  @JsonKey(
+    name: r'input',
+    required: true,
+    includeIfNull: false,
+  )
   final String input;
 
-  @JsonKey(name: r'session_id', required: false)
+  @JsonKey(
+    name: r'session_id',
+    required: false,
+    includeIfNull: false,
+  )
   final String? sessionId;
-
-  @JsonKey(name: r'context', required: false)
-  final Map<String, Object>? context;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is AIRequest &&
           other.agentId == agentId &&
+          other.context == context &&
           other.input == input &&
-          other.sessionId == sessionId &&
-          other.context == context;
+          other.sessionId == sessionId;
 
   @override
   int get hashCode =>
       agentId.hashCode +
+      (context == null ? 0 : context.hashCode) +
       input.hashCode +
-      (sessionId == null ? 0 : sessionId.hashCode) +
-      (context == null ? 0 : context.hashCode);
+      (sessionId == null ? 0 : sessionId.hashCode);
 
   factory AIRequest.fromJson(Map<String, dynamic> json) =>
       _$AIRequestFromJson(json);

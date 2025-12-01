@@ -78,6 +78,7 @@ void main() {
       toolRunner: toolRunner,
       videosApi: VideosApi(dio),
       uploadsApi: UploadsApi(dio),
+      aiApi: AiApi(dio),
       dio: dio,
     );
   });

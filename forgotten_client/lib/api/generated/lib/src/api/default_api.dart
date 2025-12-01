@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -38,8 +39,13 @@ class DefaultApi {
     final _path = r'/health';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{...?headers},
-      extra: <String, dynamic>{'secure': <Map<String, String>>[], ...?extra},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
+      extra: <String, dynamic>{
+        'secure': <Map<String, String>>[],
+        ...?extra,
+      },
       validateStatus: validateStatus,
     );
 
@@ -58,10 +64,8 @@ class DefaultApi {
       _responseData = rawData == null
           ? null
           : deserialize<Map<String, String>, String>(
-              rawData,
-              'Map<String, String>',
-              growable: true,
-            );
+              rawData, 'Map<String, String>',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -108,8 +112,13 @@ class DefaultApi {
     final _path = r'/metrics';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{...?headers},
-      extra: <String, dynamic>{'secure': <Map<String, String>>[], ...?extra},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
+      extra: <String, dynamic>{
+        'secure': <Map<String, String>>[],
+        ...?extra,
+      },
       validateStatus: validateStatus,
     );
 
@@ -174,8 +183,13 @@ class DefaultApi {
     final _path = r'/readyz';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{...?headers},
-      extra: <String, dynamic>{'secure': <Map<String, String>>[], ...?extra},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
+      extra: <String, dynamic>{
+        'secure': <Map<String, String>>[],
+        ...?extra,
+      },
       validateStatus: validateStatus,
     );
 
@@ -194,10 +208,8 @@ class DefaultApi {
       _responseData = rawData == null
           ? null
           : deserialize<Map<String, String>, String>(
-              rawData,
-              'Map<String, String>',
-              growable: true,
-            );
+              rawData, 'Map<String, String>',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -244,8 +256,13 @@ class DefaultApi {
     final _path = r'/version';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{...?headers},
-      extra: <String, dynamic>{'secure': <Map<String, String>>[], ...?extra},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
+      extra: <String, dynamic>{
+        'secure': <Map<String, String>>[],
+        ...?extra,
+      },
       validateStatus: validateStatus,
     );
 
@@ -264,10 +281,8 @@ class DefaultApi {
       _responseData = rawData == null
           ? null
           : deserialize<Map<String, String>, String>(
-              rawData,
-              'Map<String, String>',
-              growable: true,
-            );
+              rawData, 'Map<String, String>',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,

@@ -1,3 +1,5 @@
+// @dart=3.4
+// @dart=3.4
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'token_refresh_request.dart';
@@ -15,7 +17,9 @@ abstract class _$TokenRefreshRequestCWProxy {
   /// ```dart
   /// TokenRefreshRequest(...).copyWith(id: 12, name: "My name")
   /// ````
-  TokenRefreshRequest call({String refreshToken});
+  TokenRefreshRequest call({
+    String? refreshToken,
+  });
 }
 
 /// Proxy class for `copyWith` functionality. This is a callable class and can be used as follows: `instanceOfTokenRefreshRequest.copyWith(...)`. Additionally contains functions for specific fields e.g. `instanceOfTokenRefreshRequest.copyWith.fieldName(...)`
@@ -29,6 +33,7 @@ class _$TokenRefreshRequestCWProxyImpl implements _$TokenRefreshRequestCWProxy {
       this(refreshToken: refreshToken);
 
   @override
+
   /// This function **does support** nullification of nullable fields. All `null` values passed to `non-nullable` fields will be ignored. You can also use `TokenRefreshRequest(...).copyWith.fieldName(...)` to override fields one at a time with nullification support.
   ///
   /// Usage
@@ -39,10 +44,11 @@ class _$TokenRefreshRequestCWProxyImpl implements _$TokenRefreshRequestCWProxy {
     Object? refreshToken = const $CopyWithPlaceholder(),
   }) {
     return TokenRefreshRequest(
-      refreshToken: refreshToken == const $CopyWithPlaceholder()
-          ? _value.refreshToken
-          // ignore: cast_nullable_to_non_nullable
-          : refreshToken as String,
+      refreshToken:
+          refreshToken == const $CopyWithPlaceholder() || refreshToken == null
+              ? _value.refreshToken
+              // ignore: cast_nullable_to_non_nullable
+              : refreshToken as String,
     );
   }
 }
@@ -59,14 +65,24 @@ extension $TokenRefreshRequestCopyWith on TokenRefreshRequest {
 // **************************************************************************
 
 TokenRefreshRequest _$TokenRefreshRequestFromJson(Map<String, dynamic> json) =>
-    $checkedCreate('TokenRefreshRequest', json, ($checkedConvert) {
-      $checkKeys(json, requiredKeys: const ['refresh_token']);
-      final val = TokenRefreshRequest(
-        refreshToken: $checkedConvert('refresh_token', (v) => v as String),
-      );
-      return val;
-    }, fieldKeyMap: const {'refreshToken': 'refresh_token'});
+    $checkedCreate(
+      'TokenRefreshRequest',
+      json,
+      ($checkedConvert) {
+        $checkKeys(
+          json,
+          requiredKeys: const ['refresh_token'],
+        );
+        final val = TokenRefreshRequest(
+          refreshToken: $checkedConvert('refresh_token', (v) => v as String),
+        );
+        return val;
+      },
+      fieldKeyMap: const {'refreshToken': 'refresh_token'},
+    );
 
 Map<String, dynamic> _$TokenRefreshRequestToJson(
-  TokenRefreshRequest instance,
-) => <String, dynamic>{'refresh_token': instance.refreshToken};
+        TokenRefreshRequest instance) =>
+    <String, dynamic>{
+      'refresh_token': instance.refreshToken,
+    };

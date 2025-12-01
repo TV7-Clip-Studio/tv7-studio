@@ -1,78 +1,34 @@
-# Architecture Plan (Flutter client)
+# TV7 Architecture (Aligned to `tv7_high_architecture.md`)
 
-## Goals and targets
-- Platforms: desktop first (macOS/Windows/Linux), mobile parity (iOS/Android) after desktop pipeline is solid.
-- Single Flutter codebase with flavors: dev/stage/prod via dart-defines/.env per platform.
-- Local-heavy media pipeline; backend handles auth/metadata/feature flags/publishing hooks.
+`tv7_high_architecture.md` is the canonical source. This doc restates the architecture in repo terms and how the Flutter app, FastAPI control plane, and scheduler worker fit together.
 
-## App layers
-- Presentation: Flutter UI with state management (e.g., Riverpod/Bloc) and responsive layouts for desktop/mobile.
-- Domain/services: Auth/session, media pipeline orchestration, sync engine, settings, telemetry/logging.
-- Data: Generated OpenAPI client + thin SDK wrapper (auth refresh, retries, logging); local cache (SQLite or Hive) for metadata and offline queue.
-- Platform channels/FFI: invoke local binaries (ffmpeg, yt-dlp, whisper.cpp) and handle process streams.
+## Component Roles
+- **Flutter app (desktop-first)**: local-first pipeline. Handles auth/licensing, ingest (file/YouTube), local transcription (Whisper.cpp), LLM clip suggestions via backend, auto clipping (ffmpeg), timeline/editing/export, optional local posting, Pro uploads for scheduling, schedule status display, Pro dashboard in WebView.
+- **FastAPI control plane**: auth + trial + license issuance (signed token), clip suggestion endpoint (LLM provider), Pro-only clip upload & scheduling APIs, social OAuth (Pro), config/feature flags, payment integration, minimal web dashboard.
+- **Scheduler worker**: polls DB for `scheduled` posts, publishes at `publish_at`, retries/failure logging, updates status (`scheduled` → `posted|failed`), runs with access to object storage and platform tokens.
+- **Storage**: Postgres tables for users, licenses, scheduled posts, social connections; S3-compatible bucket for Pro clip uploads.
 
-## Config & flavors
-- dart-defines or .env per flavor: `API_BASE_URL`, `OPENAI_MODE` (local/cloud), `FEATURE_FLAGS` (publishing, local_highlights, etc.), `APP_LOG_LEVEL`.
-- Secrets: never ship backend keys; user supplies OpenAI key or receives short-lived tokens from backend.
-- Settings screen to override: OpenAI key, paths to binaries, toggle local vs cloud highlights, opt into pre-release updates.
+## App ↔ Backend Contracts
+- **Auth & licensing**: register/login/trial validation/license activation. Backend returns signed license token with `plan` (`trial|core|pro`) + `expires_at`; app caches securely for offline use and blocks when expired.
+- **Clip suggestions**: app sends transcript (local + YouTube merge) + optional prompt; backend returns clip segments (start/end) with titles/descriptions/hooks.
+- **Uploads & scheduling (Pro)**: app uploads rendered clip + metadata; backend stores and creates ScheduledPost; app polls status; social OAuth handled in backend WebUI.
+- **Config**: app fetches config/feature flags (publishing enabled, limits, OpenAI policy) and gates flows accordingly.
 
-## Auth/session
-- Backend JWT login/refresh; store tokens securely: Keychain/Keystore on mobile, platform key stores on desktop (fallback encrypted file with OS secrets).
-- Auto-refresh before expiry; purge on logout/expiry; attach auth headers in API client wrapper.
-- Handle 401/403 globally with session invalidation and re-login prompt.
+## Local Pipeline (App)
+- Workspace under app data dir (`ingest/normalize/render/logs/cache`).
+- Ingest: YouTube via `yt-dlp` or file import; metadata + transcript saved locally.
+- Transcription: Whisper.cpp by default; backend/cloud fallback when disabled/failing.
+- Clip suggestion: backend LLM endpoint; results drive auto clipping.
+- Editing/export: timeline/trim/text/subtitles; ffmpeg renders; local export; optional local posting.
 
-## API client
-- Source of truth: backend OpenAPI spec.
-- Generation: `openapi-generator-cli -g dart-dio` (pinned version); keep generated code committed and linted.
-- Wrapper: request logging (debug), retry with backoff, token refresh hook, error normalization for UI.
+## Pro Scheduler Flow (App + Backend + Worker)
+1) User on Pro uploads rendered clip (or gets signed URL) + metadata to backend.
+2) Backend persists ScheduledPost with `publish_at` and platform list; returns status.
+3) Worker posts at `publish_at`, retries on failure, updates status/logs.
+4) App polls status and surfaces posted/failed info; Pro dashboard in WebView handles OAuth/platform connections.
 
-## Local tools strategy
-- Required: `ffmpeg`, `yt-dlp`. Optional: `whisper.cpp` for local transcripts/highlights.
-- Distribution per OS:
-  - macOS: bundle binaries in app resources when licensing allows; otherwise prompt install (brew) or user-provided path.
-  - Windows: ship bundled binaries; allow custom paths.
-- Linux: prefer bundled AppImage/embedded; fallback to system packages; allow custom paths.
-- iOS/Android: no external binaries; rely on native-compiled libs or defer heavy pipeline to desktop until mobile path is ready.
-- Validation: check versions/paths at startup and in settings; surface missing deps with guided install.
-
-## Local models menu (recommendations)
-- Transcripts: `whisper.cpp` GGUF (tiny/base/small/medium/large). Default to base for speed/quality balance; allow user to pick larger if hardware permits (Metal on Apple Silicon). Cloud/OpenAI acts as a fallback when local is disabled or fails.
-- Highlights/LLM (optional): llama.cpp-compatible GGUF (e.g., LLaMA 3.2/3.1 8B, Mistral 7B, Phi-3 mini). Ship no model by default; prompt download on enable. Prefer q4/q5 quant. Use Metal/Vulkan if available.
-- Mobile: default to cloud path; gate local models behind an explicit toggle with hardware check and thermal/battery warnings.
-- Fallback policy: try local if enabled + model present + hardware passes check; on failure (missing model/OOM/error), fall back to cloud and surface a toast/log entry.
-
-## Media pipeline (local)
-- Workspace: app data dir with subdirs: `/ingest`, `/normalize`, `/render`, `/logs`, `/cache`. Clean per-job on completion; rotate logs.
-- Ingest: YouTube via `yt-dlp` or local file import; validate size/format; compute hashes and basic metadata (duration, dimensions).
-- Normalize: ffmpeg scale to 9:16 target height, clamp bitrate/codec, write to `/normalize`.
-- Transcript: default local `whisper.cpp` (GGUF) with cloud/OpenAI fallback when disabled or failing; store transcript alongside media.
-- Highlights: default cloud (backend/OpenAI); optional local small model if available.
-- Render: ffmpeg slice/reframe clips; optional burn-in subtitles; output to `/render`.
-- Progress: stream process logs; track stages for UI; support cancel/retry.
-
-## Sync/offline model
-- Local cache (SQLite/Hive): videos, clips, statuses, transcripts, pending uploads.
-- Sync engine: pull metadata from backend; push local changes and statuses; reconcile conflicts by last-updated + server authority on shared fields.
-- Offline queue: queue pushes until online; exponential backoff; resumable uploads if assets are sent.
-
-## Error handling & observability
-- Structured logs per job stored under `/logs`; include process stderr/stdout tails for user-visible errors.
-- User-facing errors mapped to friendly codes; allow export of logs for support.
-- Optional analytics/telemetry gated by opt-in and flavor (off by default in prod unless configured).
-
-## UX/key screens
-- Auth/login, dashboard showing backend metadata, workspace/queue view, job detail with stage progress, settings (OpenAI key, binary paths, feature toggles), logs viewer.
-- Desktop-first controls with keyboard shortcuts; mobile layouts adapt with bottom navigation and simplified controls.
-
-## Build & distribution
-- Desktop: dmg (macOS), msix (Windows), AppImage (Linux). Start unsigned for internal tests; add signing/notarization later.
-- Mobile: TestFlight/Play Internal; consider deferring on-device rendering if perf/storage is insufficient initially.
-- CI: `flutter format`/`analyze`/`test`; desktop build checks; openapi generation lint; pinned toolchain versions.
-
-## Publishing (cloud-owned)
-- See `docs/publishing_contract.md` for roles. Backend holds platform tokens and runs publish jobs; client triggers/polls and uploads assets if required. Clips without an `asset_url` remain `ready_local_only` (non-publishable).
-
-## Immediate implementation steps
-- Bootstrap Flutter project `forgotten_client` with flavors and env wiring.
-- Pull/export latest backend OpenAPI spec; commit generator config and generated client.
-- Implement auth shell (login screen, token storage, refresh hook) and a basic dashboard calling a simple metadata endpoint.
+## Non-functional
+- Local-first, offline-capable while license token valid.
+- Low backend cost (no heavy media processing in cloud).
+- JWT-signed license tokens; secure storage client-side; HTTPS everywhere.
+- Scheduler reliability and retry safety.

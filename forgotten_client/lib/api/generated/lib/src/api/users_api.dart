@@ -1,3 +1,4 @@
+// @dart=3.4
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
@@ -44,10 +45,16 @@ class UsersApi {
     final _path = r'/api/v1/users/';
     final _options = Options(
       method: r'POST',
-      headers: <String, dynamic>{...?headers},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
         ],
         ...?extra,
       },
@@ -61,7 +68,10 @@ class UsersApi {
       _bodyData = jsonEncode(userCreate);
     } catch (error, stackTrace) {
       throw DioException(
-        requestOptions: _options.compose(_dio.options, _path),
+        requestOptions: _options.compose(
+          _dio.options,
+          _path,
+        ),
         type: DioExceptionType.unknown,
         error: error,
         stackTrace: stackTrace,
@@ -83,11 +93,8 @@ class UsersApi {
       final rawData = _response.data;
       _responseData = rawData == null
           ? null
-          : deserialize<UserRead, UserRead>(
-              rawData,
-              'UserRead',
-              growable: true,
-            );
+          : deserialize<UserRead, UserRead>(rawData, 'UserRead',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
@@ -134,10 +141,16 @@ class UsersApi {
     final _path = r'/api/v1/users/';
     final _options = Options(
       method: r'GET',
-      headers: <String, dynamic>{...?headers},
+      headers: <String, dynamic>{
+        ...?headers,
+      },
       extra: <String, dynamic>{
         'secure': <Map<String, String>>[
-          {'type': 'http', 'scheme': 'bearer', 'name': 'HTTPBearer'},
+          {
+            'type': 'http',
+            'scheme': 'bearer',
+            'name': 'HTTPBearer',
+          },
         ],
         ...?extra,
       },
@@ -158,11 +171,8 @@ class UsersApi {
       final rawData = _response.data;
       _responseData = rawData == null
           ? null
-          : deserialize<List<UserRead>, UserRead>(
-              rawData,
-              'List<UserRead>',
-              growable: true,
-            );
+          : deserialize<List<UserRead>, UserRead>(rawData, 'List<UserRead>',
+              growable: true);
     } catch (error, stackTrace) {
       throw DioException(
         requestOptions: _response.requestOptions,
