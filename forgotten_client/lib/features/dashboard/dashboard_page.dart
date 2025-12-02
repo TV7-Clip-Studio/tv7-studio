@@ -592,65 +592,69 @@ class _DashboardPageState extends State<DashboardPage> {
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
           // Source video actions
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (context) => VideoPlayerPage(
-                        videoPath: sourceVideo.file.path,
-                        repository: widget.localVideoRepository,
+          SingleChildScrollView(
+            primary: false,
+            controller: ScrollController(keepScrollOffset: false),
+            scrollDirection: Axis.horizontal,
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (context) => VideoPlayerPage(
+                          videoPath: sourceVideo.file.path,
+                          repository: widget.localVideoRepository,
+                        ),
                       ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Play Source'),
-              ),
-              const SizedBox(width: 8),
-              TextButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (context) => VideoPlayerPage(
-                        videoPath: sourceVideo.file.path,
-                        repository: widget.localVideoRepository,
-                        enableEditing: true,
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.timeline),
-                label: const Text('Edit Clips'),
-              ),
-              const SizedBox(width: 8),
-              TextButton.icon(
-                onPressed: () async {
-                  await _autoCreateClipsFromHighlights(groupKey, sourceVideo);
-                },
-                icon: const Icon(Icons.content_cut),
-                label: const Text('Quick Clip'),
-              ),
-              const SizedBox(width: 8),
-              TextButton.icon(
-                onPressed: () async {
-                  await _syncAllForVideo(sourceVideo, clips, groupKey);
-                },
-                icon: const Icon(Icons.cloud_upload_outlined),
-                label: const Text('Sync All'),
-              ),
-              const SizedBox(width: 8),
-              TextButton.icon(
-                onPressed: () => _deleteVideo(sourceVideo.file.path),
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                label: const Text(
-                  'Delete Source',
-                  style: TextStyle(color: Colors.red),
+                    );
+                  },
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Play Source'),
                 ),
-              ),
-            ],
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (context) => VideoPlayerPage(
+                          videoPath: sourceVideo.file.path,
+                          repository: widget.localVideoRepository,
+                          enableEditing: true,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.timeline),
+                  label: const Text('Edit Clips'),
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    await _autoCreateClipsFromHighlights(groupKey, sourceVideo);
+                  },
+                  icon: const Icon(Icons.content_cut),
+                  label: const Text('Quick Clip'),
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    await _syncAllForVideo(sourceVideo, clips, groupKey);
+                  },
+                  icon: const Icon(Icons.cloud_upload_outlined),
+                  label: const Text('Sync All'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _deleteVideo(sourceVideo.file.path),
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  label: const Text(
+                    'Delete Source',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
           ),
           const Divider(),
           if (clips.isEmpty)
