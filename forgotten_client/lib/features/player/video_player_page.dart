@@ -705,10 +705,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     ),
                   ),
                 ),
-                ...clipWidgets.map(
-                  (w) =>
-                      MouseRegion(cursor: SystemMouseCursors.click, child: w),
-                ),
+                ...clipWidgets,
                 Positioned(
                   left: playheadX.clamp(0.0, width).toDouble(),
                   top: 0,

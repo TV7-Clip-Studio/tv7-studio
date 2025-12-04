@@ -119,9 +119,14 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(height: 32),
                         TextFormField(
                           controller: _emailController,
+                          style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
                             labelText: 'Email',
-                            prefixIcon: const Icon(Icons.email_outlined),
+                            labelStyle: TextStyle(color: Colors.grey.shade700),
+                            prefixIcon: Icon(
+                              Icons.email_outlined,
+                              color: Colors.grey.shade700,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -148,9 +153,14 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _passwordController,
+                          style: const TextStyle(color: Colors.black87),
                           decoration: InputDecoration(
                             labelText: 'Password',
-                            prefixIcon: const Icon(Icons.lock_outline),
+                            labelStyle: TextStyle(color: Colors.grey.shade700),
+                            prefixIcon: Icon(
+                              Icons.lock_outline,
+                              color: Colors.grey.shade700,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),

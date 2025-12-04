@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:forgotten_client/config/app_config.dart';
+import 'package:forgotten_client/config/app_theme.dart';
 import 'package:forgotten_client/data/api/api_client.dart';
 import 'package:forgotten_client/data/auth/auth_repository.dart';
 import 'package:forgotten_client/data/auth/models.dart';
@@ -22,10 +23,7 @@ class App extends StatelessWidget {
     return MaterialApp(
       title: 'Forgotten Client',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-        useMaterial3: true,
-      ),
+      theme: MidnightTheme.themeData,
       home: _Shell(config: config),
     );
   }
