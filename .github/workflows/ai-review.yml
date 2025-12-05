@@ -95,31 +95,7 @@ jobs:
             exit 0
           fi
 
-          payload=$(python - <<'PY'
-import json, os
-
-diff_path = os.environ["DIFF_PATH"]
-with open(diff_path, "r", encoding="utf-8") as f:
-    diff = f.read()
-
-payload = {
-    "model": "deepseek-coder",
-    "messages": [
-        {
-            "role": "system",
-            "content": "You are a senior backend engineer reviewing a pull request. You only see the diff. Identify bugs, logic errors, security risks, edge cases, and suggest improvements. Output concise, high-signal commentary in Markdown."
-        },
-        {
-            "role": "user",
-            "content": f"Review this PR diff:\\n\\n{diff}"
-        }
-    ],
-    "temperature": 0.2
-}
-
-print(json.dumps(payload))
-PY
-)
+          payload=$(python -c 'import json, sys; from pathlib import Path; diff=Path(sys.argv[1]).read_text(encoding="utf-8"); print(json.dumps({"model":"deepseek-coder","messages":[{"role":"system","content":"You are a senior backend engineer reviewing a pull request. You only see the diff. Identify bugs, logic errors, security risks, edge cases, and suggest improvements. Output concise, high-signal commentary in Markdown."},{"role":"user","content":f"Review this PR diff:\\n\\n{diff}"}],"temperature":0.2}))' "$DIFF_PATH")
 
           response=$(curl -sS -X POST https://api.deepseek.com/v1/chat/completions \
             -H "Content-Type: application/json" \
