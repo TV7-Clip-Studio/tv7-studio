@@ -104,9 +104,11 @@ jobs:
 
           echo "$response" > /tmp/deepseek_response.json
           content=$(jq -r '.choices[0].message.content // ""' /tmp/deepseek_response.json)
-          echo "content<<'EOF'" >> "$GITHUB_OUTPUT"
-          echo "$content" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "content<<CONTENT_EOF"
+            echo "$content"
+            echo "CONTENT_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Post DeepSeek feedback as PR comment
         if: steps.guard.outputs.should-run == 'true' && steps.deepseek.outputs.content != ''
