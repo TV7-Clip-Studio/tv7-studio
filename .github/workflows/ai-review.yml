@@ -97,9 +97,11 @@ jobs:
 
           payload=$(python - <<'PY'
 import json, os
+
 diff_path = os.environ["DIFF_PATH"]
 with open(diff_path, "r", encoding="utf-8") as f:
     diff = f.read()
+
 payload = {
     "model": "deepseek-coder",
     "messages": [
@@ -114,6 +116,7 @@ payload = {
     ],
     "temperature": 0.2
 }
+
 print(json.dumps(payload))
 PY
 )
