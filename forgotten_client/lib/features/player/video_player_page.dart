@@ -71,6 +71,22 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     super.dispose();
   }
 
+  Widget _buildClipListPane({bool scrollable = false}) {
+    if (_suggestedClips.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final content = _buildClipEditorPanel(scrollable: scrollable);
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+      ),
+      child: content,
+    );
+  }
+
   void _listenToPlayerStreams() {
     _positionSub = player.stream.position.listen((pos) {
       if (!mounted) return;
@@ -444,6 +460,48 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _updateSelectedClipBounds(currentStart, currentEnd);
   }
 
+  void _moveSelectedClipBy({
+    required double deltaPx,
+    required double trackWidth,
+    required Duration duration,
+  }) {
+    final idx = _selectedClipIndex;
+    if (idx == null) return;
+    if (duration <= _minClipLength) return;
+    final clip = _suggestedClips[idx];
+    var currentStart = _start ?? Duration(seconds: clip.startSec);
+    var currentEnd = _end ?? Duration(seconds: clip.endSec);
+    if (trackWidth <= 0 || duration.inMilliseconds <= 0) return;
+
+    final deltaMs = (deltaPx / trackWidth * duration.inMilliseconds)
+        .round()
+        .toInt();
+    final delta = Duration(milliseconds: deltaMs);
+
+    currentStart += delta;
+    currentEnd += delta;
+
+    // Clamp to bounds
+    if (currentStart < Duration.zero) {
+      final diff = Duration.zero - currentStart;
+      currentStart += diff;
+      currentEnd += diff;
+    }
+    if (currentEnd > duration) {
+      final diff = currentEnd - duration;
+      currentStart -= diff;
+      currentEnd -= diff;
+    }
+    currentStart = _snapDuration(
+      _clampDuration(currentStart, Duration.zero, duration - _minClipLength),
+    );
+    currentEnd = _snapDuration(
+      _clampDuration(currentEnd, currentStart + _minClipLength, duration),
+    );
+
+    _updateSelectedClipBounds(currentStart, currentEnd);
+  }
+
   void _seekFromTrack(double dx, double width, Duration duration) {
     if (width <= 0 || duration.inMilliseconds <= 0) return;
     final ratio = (dx / width).clamp(0.0, 1.0);
@@ -488,11 +546,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   '${_formatDuration(_playhead)} / ${_formatDuration(effectiveDuration)}',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
-              const SizedBox(width: 8),
-              FilledButton.tonal(
-                onPressed: _isDetecting ? null : _detectHighlights,
-                child: const Text('Create new clips'),
-              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -553,19 +606,29 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               width: spanWidth,
               top: 20,
               height: 22,
-              child: GestureDetector(
-                onTap: () => _selectClip(i),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(6),
-                    color: selected
-                        ? colorScheme.primary.withValues(alpha: 0.35)
-                        : colorScheme.secondary.withValues(alpha: 0.3),
-                    border: Border.all(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => _selectClip(i),
+                  onHorizontalDragUpdate: selected
+                      ? (details) => _moveSelectedClipBy(
+                          deltaPx: details.delta.dx,
+                          trackWidth: width,
+                          duration: duration,
+                        )
+                      : null,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
                       color: selected
-                          ? colorScheme.primary
-                          : colorScheme.outline,
-                      width: selected ? 2 : 1,
+                          ? colorScheme.primary.withValues(alpha: 0.35)
+                          : colorScheme.secondary.withValues(alpha: 0.3),
+                      border: Border.all(
+                        color: selected
+                            ? colorScheme.primary
+                            : colorScheme.outline,
+                        width: selected ? 2 : 1,
+                      ),
                     ),
                   ),
                 ),
@@ -581,13 +644,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 top: 12,
                 width: handleWidth,
                 height: 38,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onHorizontalDragUpdate: (details) => _adjustSelectedClip(
-                    deltaPx: details.delta.dx,
-                    trackWidth: width,
-                    duration: duration,
-                    isStartHandle: true,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragUpdate: (details) => _adjustSelectedClip(
+                      deltaPx: details.delta.dx,
+                      trackWidth: width,
+                      duration: duration,
+                      isStartHandle: true,
+                    ),
                   ),
                 ),
               ),
@@ -600,13 +666,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 top: 12,
                 width: handleWidth,
                 height: 38,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onHorizontalDragUpdate: (details) => _adjustSelectedClip(
-                    deltaPx: details.delta.dx,
-                    trackWidth: width,
-                    duration: duration,
-                    isStartHandle: false,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragUpdate: (details) => _adjustSelectedClip(
+                      deltaPx: details.delta.dx,
+                      trackWidth: width,
+                      duration: duration,
+                      isStartHandle: false,
+                    ),
                   ),
                 ),
               ),
@@ -614,276 +683,187 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           }
         }
 
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (details) =>
-              _seekFromTrack(details.localPosition.dx, width, duration),
-          onHorizontalDragUpdate: (details) =>
-              _seekFromTrack(details.localPosition.dx, width, duration),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                top: 26,
-                bottom: 26,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: colorScheme.surfaceContainerHighest.withValues(
-                      alpha: 0.6,
+        return MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (details) =>
+                _seekFromTrack(details.localPosition.dx, width, duration),
+            onHorizontalDragUpdate: (details) =>
+                _seekFromTrack(details.localPosition.dx, width, duration),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  top: 26,
+                  bottom: 26,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.6,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              ...clipWidgets,
-              Positioned(
-                left: playheadX.clamp(0.0, width).toDouble(),
-                top: 0,
-                bottom: 0,
-                child: Container(width: 2, color: colorScheme.primary),
-              ),
-            ],
+                ...clipWidgets,
+                Positioned(
+                  left: playheadX.clamp(0.0, width).toDouble(),
+                  top: 0,
+                  bottom: 0,
+                  child: Container(width: 2, color: colorScheme.primary),
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildClipEditorPanel() {
-    return Expanded(
-      child: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: _suggestedClips.length,
-              itemBuilder: (context, index) {
-                final clip = _suggestedClips[index];
-                final selected = index == _selectedClipIndex;
-                final start = _formatDuration(Duration(seconds: clip.startSec));
-                final end = _formatDuration(Duration(seconds: clip.endSec));
-                return ListTile(
-                  leading: const Icon(Icons.movie_creation_outlined),
-                  title: Text(
-                    clip.hook,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text('$start - $end'),
-                  selected: selected,
-                  selectedTileColor: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.08),
-                  onTap: () => _selectClip(index),
-                );
-              },
+  Widget _buildClipEditorPanel({bool scrollable = false}) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Clips', style: Theme.of(context).textTheme.titleMedium),
+            TextButton.icon(
+              onPressed: _isDetecting ? null : _detectHighlights,
+              icon: const Icon(Icons.add),
+              label: const Text('Create new clips'),
             ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 240),
+          child: ListView.builder(
+            shrinkWrap: true,
+            controller: scrollable
+                ? ScrollController()
+                : PrimaryScrollController.of(context),
+            physics: scrollable
+                ? const ClampingScrollPhysics()
+                : const NeverScrollableScrollPhysics(),
+            itemCount: _suggestedClips.length,
+            itemBuilder: (context, index) {
+              final clip = _suggestedClips[index];
+              final selected = index == _selectedClipIndex;
+              final start = _formatDuration(Duration(seconds: clip.startSec));
+              final end = _formatDuration(Duration(seconds: clip.endSec));
+              return ListTile(
+                leading: const Icon(Icons.movie_creation_outlined),
+                title: Text(
+                  clip.hook,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text('$start - $end'),
+                selected: selected,
+                selectedTileColor: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.08),
+                onTap: () => _selectClip(index),
+              );
+            },
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _startFieldController,
-                        decoration: const InputDecoration(
-                          labelText: 'Start (mm:ss or seconds)',
-                          border: OutlineInputBorder(),
-                        ),
-                        onEditingComplete: _applyTimeFields,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _endFieldController,
-                        decoration: const InputDecoration(
-                          labelText: 'End (mm:ss or seconds)',
-                          border: OutlineInputBorder(),
-                        ),
-                        onEditingComplete: _applyTimeFields,
-                      ),
-                    ),
-                  ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimelineAndEditor() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildTimelineCard(context),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _startFieldController,
+                decoration: const InputDecoration(
+                  labelText: 'Start (mm:ss or seconds)',
+                  border: OutlineInputBorder(),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    FilledButton.tonal(
-                      onPressed: _applyTimeFields,
-                      child: const Text('Apply times'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonal(
-                      onPressed: _start != null
-                          ? () => player.seek(_start!)
-                          : null,
-                      child: const Text('Seek start'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonal(
-                      onPressed: _end != null ? () => player.seek(_end!) : null,
-                      child: const Text('Seek end'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    FilledButton.tonal(
-                      onPressed: () {
-                        final duration = _duration ?? player.state.duration;
-                        if (duration.inMilliseconds <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Duration not available yet'),
-                            ),
-                          );
-                          return;
-                        }
-                        if (duration <= _minClipLength) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Video is too short for clip editing',
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-                        final current = player.state.position;
-                        final clamped = _clampDuration(
-                          _snapDuration(current),
-                          Duration.zero,
-                          duration - _minClipLength,
-                        );
-                        final desiredEnd = _end ?? clamped + _minClipLength;
-                        final clampedEnd = _clampDuration(
-                          desiredEnd,
-                          clamped + _minClipLength,
-                          duration,
-                        );
-                        _updateSelectedClipBounds(clamped, clampedEnd);
-                      },
-                      child: const Text('Set start to playhead'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonal(
-                      onPressed: () {
-                        final duration = _duration ?? player.state.duration;
-                        if (duration.inMilliseconds <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Duration not available yet'),
-                            ),
-                          );
-                          return;
-                        }
-                        if (duration <= _minClipLength) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Video is too short for clip editing',
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-                        final current = player.state.position;
-                        final clamped = _clampDuration(
-                          _snapDuration(current),
-                          Duration.zero,
-                          duration,
-                        );
-                        final startSafe = _start ?? Duration.zero;
-                        final endSafe = clamped <= startSafe
-                            ? startSafe + _minClipLength
-                            : clamped;
-                        _updateSelectedClipBounds(
-                          startSafe,
-                          _clampDuration(
-                            endSafe,
-                            startSafe + _minClipLength,
-                            duration,
-                          ),
-                        );
-                      },
-                      child: const Text('Set end to playhead'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Title',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _descriptionController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Description',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _hookController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Hook',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed:
-                      (_start != null &&
-                          _end != null &&
-                          _selectedClipIndex != null)
-                      ? () {
-                          final idx = _selectedClipIndex!;
-                          setState(() {
-                            _suggestedClips[idx] = api.SuggestedClip(
-                              startSec: _start!.inSeconds,
-                              endSec: _end!.inSeconds,
-                              title: _titleController.text.trim().isEmpty
-                                  ? _suggestedClips[idx].title
-                                  : _titleController.text.trim(),
-                              description:
-                                  _descriptionController.text.trim().isEmpty
-                                  ? _suggestedClips[idx].description
-                                  : _descriptionController.text.trim(),
-                              hook: _hookController.text.trim().isEmpty
-                                  ? _suggestedClips[idx].hook
-                                  : _hookController.text.trim(),
-                            );
-                          });
-                          _createClip();
-                        }
-                      : null,
-                  icon: const Icon(Icons.cloud_upload),
-                  label: const Text('Send Clip'),
-                ),
-              ],
+                onEditingComplete: _applyTimeFields,
+              ),
             ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _endFieldController,
+                decoration: const InputDecoration(
+                  labelText: 'End (mm:ss or seconds)',
+                  border: OutlineInputBorder(),
+                ),
+                onEditingComplete: _applyTimeFields,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _titleController,
+          decoration: const InputDecoration(
+            labelText: 'Title',
+            border: OutlineInputBorder(),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _descriptionController,
+          maxLines: 2,
+          decoration: const InputDecoration(
+            labelText: 'Description',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _hookController,
+          maxLines: 2,
+          decoration: const InputDecoration(
+            labelText: 'Hook',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed:
+              (_start != null && _end != null && _selectedClipIndex != null)
+              ? () {
+                  final idx = _selectedClipIndex!;
+                  setState(() {
+                    _suggestedClips[idx] = api.SuggestedClip(
+                      startSec: _start!.inSeconds,
+                      endSec: _end!.inSeconds,
+                      title: _titleController.text.trim().isEmpty
+                          ? _suggestedClips[idx].title
+                          : _titleController.text.trim(),
+                      description: _descriptionController.text.trim().isEmpty
+                          ? _suggestedClips[idx].description
+                          : _descriptionController.text.trim(),
+                      hook: _hookController.text.trim().isEmpty
+                          ? _suggestedClips[idx].hook
+                          : _hookController.text.trim(),
+                    );
+                  });
+                  _createClip();
+                }
+              : null,
+          icon: const Icon(Icons.save),
+          label: const Text('Save'),
+        ),
+      ],
     );
   }
 
   Widget _buildStandardLayout() {
     return Column(
       children: [
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Video(controller: controller),
-        ),
+        _buildVideoViewport(),
         Expanded(
           child: _suggestedClips.isNotEmpty
               ? _buildClipEditorPanel()
@@ -898,30 +878,91 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   }
 
   Widget _buildEditorLayout(BuildContext context) {
-    return Column(
-      children: [
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Video(controller: controller),
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildTimelineCard(context),
-                if (_suggestedClips.isNotEmpty)
-                  SizedBox(height: 380, child: _buildClipEditorPanel()),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 1080;
+
+        final clipPane = SizedBox(
+          width: 260,
+          child: _buildClipListPane(scrollable: true),
+        );
+
+        final videoPane = Expanded(child: _buildVideoViewport());
+        final timelinePane = _buildTimelineAndEditor();
+
+        if (isNarrow) {
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: clipPane,
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: _buildVideoViewport(),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: timelinePane,
+                ),
+              ),
+              if (_isProcessing)
+                const LinearProgressIndicator()
+              else
+                const SizedBox.shrink(),
+            ],
+          );
+        }
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [clipPane, const SizedBox(width: 12), videoPane],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: timelinePane,
+              ),
+            ),
+            if (_isProcessing)
+              const LinearProgressIndicator()
+            else
+              const SizedBox.shrink(),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildVideoViewport() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxHeight = (MediaQuery.of(context).size.height * 0.5).clamp(
+          300.0,
+          460.0,
+        );
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: maxHeight,
+              maxWidth: constraints.maxWidth,
+            ),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Video(controller: controller),
             ),
           ),
-        ),
-        if (_isProcessing)
-          const LinearProgressIndicator()
-        else
-          const SizedBox.shrink(),
-      ],
+        );
+      },
     );
   }
 
