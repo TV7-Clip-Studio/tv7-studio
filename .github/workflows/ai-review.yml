@@ -10,118 +10,53 @@ permissions:
   issues: write
 
 jobs:
-  deepseek-review:
-    name: DeepSeek Review
+  determine-context:
     runs-on: ubuntu-latest
-
+    outputs:
+      info: ${{ steps.context.outputs.info }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Guard - branch and change thresholds
-        id: guard
-        shell: bash
-        env:
-          RUN_ON_BRANCHES: "main"
-          MIN_CHANGED: 5
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
+      - name: Determine Flutter context
+        id: context
         run: |
           set -eo pipefail
-          should_run=true
-          reason="ok"
-          changed_lines=0
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+import re
+from pathlib import Path
 
-          if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
-            should_run=false
-            reason="Not a pull_request event; skipping"
-          else
-            changed_lines=$(git diff --numstat "$BASE_SHA" "$HEAD_SHA" | awk '{add+=$1; del+=$2} END {print add+del+0}')
-            match=false
-            for raw in $(echo "$RUN_ON_BRANCHES" | tr ',' ' '); do
-              branch=$(echo "$raw" | xargs)
-              [ -z "$branch" ] && continue
-              if [ "$BASE_REF" = "$branch" ]; then
-                match=true
-              fi
-            done
-            if [ "$match" != "true" ]; then
-              should_run=false
-              reason="Base branch '$BASE_REF' not in run_on_branches '$RUN_ON_BRANCHES'"
-            elif [ "$changed_lines" -lt "$MIN_CHANGED" ]; then
-              should_run=false
-              reason="Changed lines $changed_lines below threshold $MIN_CHANGED"
-            fi
-          fi
+candidates = [Path("pubspec.yaml"), Path("forgotten_client/pubspec.yaml")]
+pubspec = next((p for p in candidates if p.exists()), None)
 
-          {
-            echo "should-run=$should_run"
-            echo "reason=$reason"
-            echo "changed-lines=$changed_lines"
-          } >> "$GITHUB_OUTPUT"
+if not pubspec:
+    print("info=Flutter project: pubspec.yaml not found")
+else:
+    text = pubspec.read_text(encoding="utf-8")
+    sdk_match = re.search(r'^\s*sdk:\s*"?(?P<v>[^"\n]+)', text, re.M)
+    dart_sdk = sdk_match.group("v") if sdk_match else "unknown"
 
-      - name: Skip DeepSeek review
-        if: steps.guard.outputs.should-run != 'true'
-        run: |
-          echo "Skipping DeepSeek review: ${{ steps.guard.outputs.reason }}"
+    deps = []
+    in_deps = False
+    for line in text.splitlines():
+        if re.match(r'^\s*dependencies:\s*$', line):
+            in_deps = True
+            continue
+        if in_deps and re.match(r'^\S', line):
+            break
+        if in_deps:
+            m = re.match(r'^\s{2,}([A-Za-z0-9_]+):\s*([^\s#]+)', line)
+            if m:
+                name, ver = m.group(1), m.group(2)
+                if name in {"flutter", "sdk"}:
+                    continue
+                if len(deps) < 4:
+                    deps.append(f"{name} {ver}")
 
-      - name: Collect PR diff (truncated for cost control)
-        if: steps.guard.outputs.should-run == 'true'
-        id: diff
-        shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -eo pipefail
-          git diff --unified=3 --no-color "$BASE_SHA" "$HEAD_SHA" | head -c 120000 > /tmp/pr_diff.txt
-          bytes=$(wc -c < /tmp/pr_diff.txt | tr -d ' ')
-          echo "diff-bytes=$bytes" >> "$GITHUB_OUTPUT"
+    info = f"Flutter/Dart sdk {dart_sdk}; key deps: {', '.join(deps) if deps else 'n/a'} (from {pubspec})"
+    print(f"info={info}")
+PY
 
-      - name: Call DeepSeek
-        if: steps.guard.outputs.should-run == 'true'
-        id: deepseek
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DIFF_PATH: /tmp/pr_diff.txt
-        shell: bash
-        run: |
-          set -eo pipefail
-          if [ ! -s "$DIFF_PATH" ]; then
-            echo "No diff content found; skipping call."
-            exit 0
-          fi
-
-          payload=$(python -c 'import json, sys; from pathlib import Path; diff=Path(sys.argv[1]).read_text(encoding="utf-8"); print(json.dumps({"model":"deepseek-coder","messages":[{"role":"system","content":"You are a senior backend engineer reviewing a pull request. You only see the diff. Identify bugs, logic errors, security risks, edge cases, and suggest improvements. Output concise, high-signal commentary in Markdown."},{"role":"user","content":f"Review this PR diff:\\n\\n{diff}"}],"temperature":0.2}))' "$DIFF_PATH")
-
-          response=$(curl -sS -X POST https://api.deepseek.com/v1/chat/completions \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-            -d "$payload")
-
-          echo "$response" > /tmp/deepseek_response.json
-          content=$(jq -r '.choices[0].message.content // ""' /tmp/deepseek_response.json)
-          {
-            echo "content<<CONTENT_EOF"
-            echo "$content"
-            echo "CONTENT_EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Post DeepSeek feedback as PR comment
-        if: steps.guard.outputs.should-run == 'true' && steps.deepseek.outputs.content != ''
-        uses: actions/github-script@v7
-        env:
-          DEEPSEEK_CONTENT: ${{ steps.deepseek.outputs.content }}
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const body = `### DeepSeek review\n${process.env.DEEPSEEK_CONTENT}`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body,
-            });
+  deepseek-review:
+    needs: determine-context
+    uses: TV7-Clip-Studio/tv7-core/.github/workflows/deepseek-review.yml@main
+    with:
+      project_context: ${{ needs.determine-context.outputs.info }}
+    secrets: inherit
