@@ -34,7 +34,7 @@ help:
 
 .PHONY: format
 format:
-	$(call FLUTTER,flutter format lib test)
+	$(call FLUTTER,dart format lib test)
 
 .PHONY: analyze
 analyze:
