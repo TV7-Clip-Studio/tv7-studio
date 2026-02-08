@@ -1,0 +1,4 @@
+interface:
+  display_name: "Studio OpenAPI Sync"
+  short_description: "Sync backend contract and regenerate Dart SDK"
+  default_prompt: "Use $studio-openapi-sync to sync the canonical backend OpenAPI contract and regenerate the Flutter API client safely."

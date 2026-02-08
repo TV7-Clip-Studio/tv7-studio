@@ -1,0 +1,4 @@
+interface:
+  display_name: "Studio Pipeline Diagnostics"
+  short_description: "Diagnose local ingest and processing failures"
+  default_prompt: "Use $studio-pipeline-diagnostics to triage a local Flutter Studio media pipeline failure and drive it to a tested fix."
