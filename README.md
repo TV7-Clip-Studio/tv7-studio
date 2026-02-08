@@ -13,12 +13,13 @@ Unofficial Flutter client for the `forgotten-app` backend, focused on local-firs
 - Configurable highlight path: backend/OpenAI vs optional local small model.
 
 ## Docs
-- `docs/tv7_high_architecture.md` — canonical high-level architecture (source of truth).
-- `docs/architecture.md` — repo-level architecture aligned to TV7 Core/Pro and the control plane/worker.
-- `docs/roadmap.md` — phased delivery plan (Core foundation, pipeline, Pro scheduler, polish).
-- `docs/backend_integration.md` — FastAPI contract expectations and OpenAPI notes.
-- `docs/publishing_contract.md` — Pro scheduler ownership and publishing flow contract.
-- `docs/scaffolding.md` — Flutter project layout, flavors/env, dependencies, OpenAPI integration steps.
+- `docs/core/architecture/tv7_high_architecture.md` — canonical high-level architecture (source of truth).
+- `docs/core/repos/tv7-flutter-studio/architecture.md` — repo-level architecture aligned to TV7 Core/Pro and the control plane/worker.
+- `docs/core/roadmaps/tv7-flutter-studio-roadmap.md` — phased delivery plan (Core foundation, pipeline, Pro scheduler, polish).
+- `docs/core/repos/tv7-flutter-studio/backend_integration.md` — FastAPI contract expectations and OpenAPI notes.
+- `docs/core/repos/tv7-flutter-studio/publishing_contract.md` — Pro scheduler ownership and publishing flow contract.
+- `docs/core/repos/tv7-flutter-studio/scaffolding.md` — Flutter project layout, flavors/env, dependencies, OpenAPI integration steps.
+- `docs/core/contracts/openapi/tv7-fastapi-backend/openapi.json` — canonical backend contract artifact consumed by clients.
 
 ## Code layout (early scaffold)
 - `lib/config/app_config.dart` — flavor/env loader via dart-defines.
