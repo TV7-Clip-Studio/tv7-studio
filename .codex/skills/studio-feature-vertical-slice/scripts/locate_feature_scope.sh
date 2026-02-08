@@ -16,6 +16,8 @@ echo
 echo "Candidate directories:"
 find "${REPO_ROOT}/forgotten_client/lib/features" -type d -name "*${feature}*" 2>/dev/null | sort || true
 find "${REPO_ROOT}/forgotten_client/lib/data" -type d -name "*${feature}*" 2>/dev/null | sort || true
+find "${REPO_ROOT}/forgotten_client/lib/domain" -type d -name "*${feature}*" 2>/dev/null | sort || true
+find "${REPO_ROOT}/forgotten_client/lib/config" -type d -name "*${feature}*" 2>/dev/null | sort || true
 find "${REPO_ROOT}/forgotten_client/test" -type d -name "*${feature}*" 2>/dev/null | sort || true
 
 echo

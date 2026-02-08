@@ -23,4 +23,8 @@ if command -v shasum >/dev/null 2>&1; then
   echo "Hashes:"
   echo "  canonical: $(shasum -a 256 "${CANONICAL_SPEC}" | awk '{print $1}')"
   echo "  local:     $(shasum -a 256 "${LOCAL_SPEC}" | awk '{print $1}')"
+elif command -v sha256sum >/dev/null 2>&1; then
+  echo "Hashes:"
+  echo "  canonical: $(sha256sum "${CANONICAL_SPEC}" | awk '{print $1}')"
+  echo "  local:     $(sha256sum "${LOCAL_SPEC}" | awk '{print $1}')"
 fi
