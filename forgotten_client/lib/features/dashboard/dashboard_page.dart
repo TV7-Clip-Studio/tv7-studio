@@ -3,13 +3,20 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:forgotten_client/config/app_config.dart';
 import 'package:forgotten_client/data/auth/auth_repository.dart';
 import 'package:forgotten_client/data/config/config_repository.dart';
+import 'package:forgotten_client/data/local/diagnostics_log.dart';
+import 'package:forgotten_client/data/local/engine_client.dart';
+import 'package:forgotten_client/data/local/engine_process_manager.dart';
 import 'package:forgotten_client/data/local/local_video_repository.dart';
 import 'package:forgotten_client/data/local/media_service.dart';
+import 'package:forgotten_client/data/local/studio_diagnostics_service.dart';
 import 'package:forgotten_client/data/local/tool_runner.dart';
 import 'package:forgotten_client/features/dashboard/clip_creation_dialog.dart';
+import 'package:forgotten_client/features/diagnostics/diagnostics_page.dart';
 import 'package:forgotten_client/features/ingest/ingest_page.dart';
 import 'package:forgotten_client/features/player/video_player_page.dart';
 import 'package:forgotten_client/features/user/user_page.dart';
@@ -21,6 +28,11 @@ class DashboardPage extends StatefulWidget {
     required this.configRepository,
     required this.localVideoRepository,
     required this.authRepository,
+    required this.appConfig,
+    required this.dio,
+    required this.engineClient,
+    required this.engineStartup,
+    required this.diagnosticsLog,
     required this.usersApi,
     required this.onLogout,
     super.key,
@@ -29,6 +41,11 @@ class DashboardPage extends StatefulWidget {
   final ConfigRepository configRepository;
   final LocalVideoRepository localVideoRepository;
   final AuthRepository authRepository;
+  final AppConfig appConfig;
+  final Dio dio;
+  final EngineClient engineClient;
+  final EngineStartupResult engineStartup;
+  final DiagnosticsLog diagnosticsLog;
   final UsersApi usersApi;
   final VoidCallback onLogout;
 
@@ -100,6 +117,7 @@ class _DashboardPageState extends State<DashboardPage> {
       }
       await _loadVideos();
     } catch (e) {
+      widget.diagnosticsLog.record('Sync all', e);
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -287,22 +305,46 @@ class _DashboardPageState extends State<DashboardPage> {
                   selectedIcon: Icon(Icons.person),
                   label: Text('User'),
                 ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.monitor_heart_outlined),
+                  selectedIcon: Icon(Icons.monitor_heart),
+                  label: Text('Diagnostics'),
+                ),
               ],
             ),
             const VerticalDivider(thickness: 1, width: 1),
-            Expanded(
-              child: _selectedIndex == 0
-                  ? _buildVideosView(context)
-                  : UserPage(
-                      authRepository: widget.authRepository,
-                      usersApi: widget.usersApi,
-                      onLogout: widget.onLogout,
-                    ),
-            ),
+            Expanded(child: _buildSelectedPage(context)),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildSelectedPage(BuildContext context) {
+    return switch (_selectedIndex) {
+      0 => _buildVideosView(context),
+      1 => UserPage(
+        authRepository: widget.authRepository,
+        usersApi: widget.usersApi,
+        diagnosticsLog: widget.diagnosticsLog,
+        onOpenDiagnostics: () {
+          setState(() {
+            _selectedIndex = 2;
+          });
+        },
+        onLogout: widget.onLogout,
+      ),
+      _ => DiagnosticsPage(
+        diagnosticsLog: widget.diagnosticsLog,
+        service: StudioDiagnosticsService(
+          appConfig: widget.appConfig,
+          engineClient: widget.engineClient,
+          dio: widget.dio,
+          diagnosticsLog: widget.diagnosticsLog,
+          engineStartup: () => widget.engineStartup,
+        ),
+      ),
+    };
   }
 
   Widget _buildVideosView(BuildContext context) {
@@ -739,6 +781,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   );
                 }
               } catch (e) {
+                widget.diagnosticsLog.record('Sync clip', e);
                 if (context.mounted) {
                   ScaffoldMessenger.of(
                     context,
@@ -832,6 +875,7 @@ class _DashboardPageState extends State<DashboardPage> {
         }
       }
     } catch (e) {
+      widget.diagnosticsLog.record('Clip creation', e);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -853,6 +897,7 @@ class _DashboardPageState extends State<DashboardPage> {
         sourceVideo.file.path,
       );
     } catch (e) {
+      widget.diagnosticsLog.record('Transcript download', e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Transcript download failed: $e')),
@@ -939,6 +984,7 @@ class _DashboardPageState extends State<DashboardPage> {
           transcriptLanguage: transcript.languageCode,
         );
       } catch (e) {
+        widget.diagnosticsLog.record('Highlight detection', e);
         if (mounted) {
           ScaffoldMessenger.of(
             context,
@@ -978,6 +1024,7 @@ class _DashboardPageState extends State<DashboardPage> {
           );
           successCount++;
         } catch (e) {
+          widget.diagnosticsLog.record('Auto clip render', e);
           debugPrint('Auto clip ${i + 1} failed: $e');
         }
         setState(() {

@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:forgotten_client/data/local/media_service.dart';
 import 'package:forgotten_client/features/ingest/file_picker_area.dart';
@@ -47,7 +48,6 @@ class _IngestPageState extends State<IngestPage> {
     });
 
     try {
-      await _checkDependencies();
       final file = await widget.mediaService.prepareIngestFromUrl(
         url,
         onLog: (line) {
@@ -90,7 +90,6 @@ class _IngestPageState extends State<IngestPage> {
     });
 
     try {
-      await _checkDependencies();
       final file = await widget.mediaService.prepareIngestFromFile(path);
       if (mounted) {
         setState(() {
@@ -110,23 +109,6 @@ class _IngestPageState extends State<IngestPage> {
           _isProcessing = false;
         });
       }
-    }
-  }
-
-  Future<void> _checkDependencies() async {
-    final deps = ['yt-dlp', 'ffmpeg'];
-    final missing = <String>[];
-    for (final dep in deps) {
-      final exists = await Process.run('which', [dep]);
-      if (exists.exitCode != 0) {
-        missing.add(dep);
-      }
-    }
-    if (missing.isNotEmpty) {
-      throw Exception(
-        'Missing required tools: ${missing.join(', ')}. '
-        'Install via your package manager (e.g., brew install ffmpeg yt-dlp).',
-      );
     }
   }
 
