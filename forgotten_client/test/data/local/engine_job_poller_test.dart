@@ -1,14 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:forgotten_client/data/local/engine_client.dart';
 import 'package:forgotten_client/data/local/engine_job_poller.dart';
 
 class _FakeEngineTransport implements EngineJsonTransport {
-  _FakeEngineTransport(this.jobs, {this.logs = const []});
+  _FakeEngineTransport(this.jobs, {this.logs = const [], this.jobFailures = 0});
 
   final List<Map<String, dynamic>> jobs;
   final List<String> logs;
+  int jobFailures;
   var jobRequests = 0;
 
   @override
@@ -26,6 +28,10 @@ class _FakeEngineTransport implements EngineJsonTransport {
       );
     }
     if (uri.path == '/v1/jobs/job_1') {
+      if (jobFailures > 0) {
+        jobFailures--;
+        throw const SocketException('temporary Engine connection failure');
+      }
       final index = jobRequests >= jobs.length ? jobs.length - 1 : jobRequests;
       jobRequests++;
       final json = jobs[index];
@@ -100,6 +106,50 @@ void main() {
       const Duration(milliseconds: 500),
     ]);
     expect(logs, ['queued', 'running', 'done']);
+  });
+
+  test('retries transient getJob failures with the same backoff', () async {
+    final transport = _FakeEngineTransport([
+      _jobJson('running', logs: ['running']),
+      _jobJson('succeeded', logs: ['done']),
+    ], jobFailures: 1);
+    final delays = <Duration>[];
+    final poller = EngineJobPoller(
+      engineClient: EngineClient(
+        baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+        transport: transport,
+      ),
+      policy: const EngineJobPollingPolicy(
+        initialInterval: Duration(milliseconds: 250),
+        maxInterval: Duration(seconds: 1),
+      ),
+      delay: (delay) async => delays.add(delay),
+    );
+
+    final completed = await poller.waitFor(_job('queued'));
+
+    expect(completed.status, 'succeeded');
+    expect(delays, [
+      const Duration(milliseconds: 250),
+      const Duration(milliseconds: 500),
+      const Duration(seconds: 1),
+    ]);
+  });
+
+  test('does not retry non-transient polling failures', () async {
+    final transport = _FakeEngineTransport([]);
+    final poller = EngineJobPoller(
+      engineClient: EngineClient(
+        baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+        transport: transport,
+      ),
+      policy: const EngineJobPollingPolicy(
+        initialInterval: Duration.zero,
+        maxInterval: Duration.zero,
+      ),
+    );
+
+    expect(() => poller.waitFor(_job('queued')), throwsA(isA<RangeError>()));
   });
 
   test(

@@ -117,6 +117,13 @@ class _FakeDiagnosticsService extends StudioDiagnosticsService {
   }
 }
 
+class _FailingDiagnosticsService extends _FakeDiagnosticsService {
+  @override
+  Future<StudioDiagnosticsSnapshot> collect() async {
+    throw StateError('diagnostics exploded');
+  }
+}
+
 void main() {
   late Directory tempDir;
   late PathProviderPlatform originalPathProvider;
@@ -203,5 +210,22 @@ void main() {
 
     expect(find.text('Local Media Engine'), findsOneWidget);
     expect(find.text('Health API'), findsOneWidget);
+  });
+
+  testWidgets('diagnostics page renders collection errors', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(),
+        home: DiagnosticsPage(
+          service: _FailingDiagnosticsService(),
+          diagnosticsLog: DiagnosticsLog(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Diagnostics unavailable'), findsOneWidget);
+    expect(find.textContaining('diagnostics exploded'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
   });
 }

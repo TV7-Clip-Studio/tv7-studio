@@ -7,11 +7,16 @@ import 'package:forgotten_client/data/local/engine_process_manager.dart';
 import 'package:path/path.dart' as p;
 
 class _FakeProcess implements EngineProcess {
-  _FakeProcess({this.killResult = true});
+  _FakeProcess({this.killResult = true, this.initiallyExited = false}) {
+    if (initiallyExited) {
+      _exitCode.complete(0);
+    }
+  }
 
   final _exitCode = Completer<int>();
   final List<ProcessSignal> signals = [];
   final bool killResult;
+  final bool initiallyExited;
 
   @override
   int get pid => 42;
@@ -237,6 +242,19 @@ void main() {
     await manager.stop();
 
     expect(process.signals, [ProcessSignal.sigterm]);
+  });
+
+  test('stop does not signal an already exited Engine process', () async {
+    final process = _FakeProcess(initiallyExited: true);
+    final manager = EngineProcessManager(
+      launcher: _FakeLauncher(process),
+      transport: _FakeTransport(diagnostics: {'status': 'ready'}),
+    );
+
+    await manager.start(config());
+    await manager.stop();
+
+    expect(process.signals, isEmpty);
   });
 
   test('stop returns when the Engine process cannot be signaled', () async {

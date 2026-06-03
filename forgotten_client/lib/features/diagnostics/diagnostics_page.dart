@@ -54,7 +54,9 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
 
   Future<void> _refreshAsync() async {
     _refresh();
-    await _snapshot;
+    try {
+      await _snapshot;
+    } catch (_) {}
   }
 
   Future<void> _runEndpointChecks() async {
@@ -92,6 +94,12 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
           child: FutureBuilder<StudioDiagnosticsSnapshot>(
             future: _snapshot,
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return _DiagnosticsLoadError(
+                  error: snapshot.error!,
+                  onRefresh: _refresh,
+                );
+              }
               if (!snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
@@ -199,6 +207,67 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _DiagnosticsLoadError extends StatelessWidget {
+  const _DiagnosticsLoadError({required this.error, required this.onRefresh});
+
+  final Object error;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        _Header(collectedAt: DateTime.now(), onRefresh: onRefresh),
+        const SizedBox(height: 20),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.error_outline_rounded,
+                  color: Theme.of(context).colorScheme.error,
+                  size: 28,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Diagnostics unavailable',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        error.toString(),
+                        maxLines: 5,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      FilledButton.icon(
+                        onPressed: onRefresh,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

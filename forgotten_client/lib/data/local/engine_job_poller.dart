@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:forgotten_client/data/local/engine_client.dart';
@@ -59,7 +60,13 @@ class EngineJobPoller {
         await _delay(interval);
       }
 
-      job = await engineClient.getJob(job.id);
+      try {
+        job = await engineClient.getJob(job.id);
+      } catch (error) {
+        if (!_isRetryablePollingError(error)) rethrow;
+        interval = _nextInterval(interval);
+        continue;
+      }
       emitLogs(job.logs);
 
       if (fetchLogs) {
@@ -80,5 +87,19 @@ class EngineJobPoller {
     final multiplied = (current.inMicroseconds * policy.multiplier).round();
     final capped = math.min(multiplied, policy.maxInterval.inMicroseconds);
     return Duration(microseconds: math.max(capped, 0));
+  }
+
+  bool _isRetryablePollingError(Object error) {
+    if (error is TimeoutException ||
+        error is SocketException ||
+        error is HttpException) {
+      return true;
+    }
+    if (error is EngineApiException) {
+      return error.statusCode == 408 ||
+          error.statusCode == 429 ||
+          error.statusCode >= 500;
+    }
+    return false;
   }
 }

@@ -134,6 +134,8 @@ class EngineProcessManager {
   final EngineProcessLauncher _launcher;
   final EngineJsonTransport _transport;
   EngineProcess? _process;
+  static const _alreadyExitedProbe = Duration(milliseconds: 1);
+  static const _anyUnixExecutableBit = 0x40 | 0x08 | 0x01;
 
   Future<EngineStartupResult> start(EngineSidecarConfig config) async {
     final binary = File(config.binaryPath);
@@ -152,7 +154,7 @@ class EngineProcessManager {
         message: 'Engine binary path is not a file: ${config.binaryPath}',
       );
     }
-    if (!Platform.isWindows && (binaryStat.mode & 0x49) == 0) {
+    if (!Platform.isWindows && (binaryStat.mode & _anyUnixExecutableBit) == 0) {
       return EngineStartupResult(
         status: EngineStartupStatus.unavailable,
         baseUri: config.baseUri,
@@ -239,6 +241,8 @@ class EngineProcessManager {
     if (process == null) return;
 
     _process = null;
+    if (await _hasExited(process)) return;
+
     final didSignal = process.kill();
     if (!didSignal) return;
     try {
@@ -250,6 +254,15 @@ class EngineProcessManager {
           await process.exitCode.timeout(const Duration(seconds: 1));
         } on TimeoutException {}
       }
+    }
+  }
+
+  Future<bool> _hasExited(EngineProcess process) async {
+    try {
+      await process.exitCode.timeout(_alreadyExitedProbe);
+      return true;
+    } on TimeoutException {
+      return false;
     }
   }
 }
