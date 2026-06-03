@@ -1,16 +1,23 @@
 // ignore_for_file: avoid_slow_async_io
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:forgotten_client/data/local/tool_runner.dart';
+import 'package:forgotten_client/data/local/engine_client.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 class MediaService {
-  MediaService({required this.toolRunner});
+  MediaService({
+    required this.engineClient,
+    this.pollInterval = const Duration(milliseconds: 250),
+    this.jobTimeout = const Duration(minutes: 30),
+  });
 
-  final ToolRunner toolRunner;
+  final EngineClient engineClient;
+  final Duration pollInterval;
+  final Duration jobTimeout;
 
   Future<Directory> get _workspace async {
     final appDocDir = await getApplicationDocumentsDirectory();
@@ -26,78 +33,68 @@ class MediaService {
     void Function(String)? onLog,
   }) async {
     final workspace = await _workspace;
-    // Use base name without extension, let yt-dlp add the correct one
     final filename = 'download_${DateTime.now().millisecondsSinceEpoch}';
-    final outputPath = p.join(workspace.path, filename);
 
-    onLog?.call('Starting download...');
+    onLog?.call('Starting Engine URL ingest...');
 
-    final collected = <String>[];
-    final stream = toolRunner.runStream('yt-dlp', [
-      '--ignore-config',
-      '--no-progress',
-      '--no-cache-dir',
-      '-f',
-      'bv*[height<=720]+ba/b[height<=720]/best',
-      '-o',
-      outputPath,
-      url,
-    ]);
-
-    try {
-      await for (final line in stream) {
-        collected.add(line);
-        onLog?.call(line);
-      }
-    } on ProcessException catch (e) {
-      final tail = collected.length > 10
-          ? collected.sublist(collected.length - 10).join('\n')
-          : collected.join('\n');
-      // Preserve failure shape for callers/tests expecting ProcessException.
-      throw ProcessException(
-        e.executable,
-        e.arguments,
-        'yt-dlp failed (exit ${e.errorCode}): ${e.message}\n$tail',
-        e.errorCode,
+    final started = await engineClient.startUrlIngest(
+      url: url,
+      outputDir: workspace.path,
+      outputTemplate: '$filename.%(ext)s',
+    );
+    final completed = await _waitForJob(started, onLog: onLog);
+    if (completed.status != 'succeeded') {
+      throw StateError(
+        completed.error == null || completed.error!.isEmpty
+            ? 'Engine ingest job ${completed.status}'
+            : completed.error!,
       );
     }
 
-    // Find the actual file created (yt-dlp adds extension)
-    File? actualFile;
-    try {
-      final files = workspace.listSync();
-      // Find file that starts with our base name and is a video
-      actualFile = files.whereType<File>().firstWhere(
-        (f) =>
-            p.basename(f.path).startsWith(filename) &&
-            !f.path.endsWith('.part') &&
-            !f.path.endsWith('.ytdl'),
-        orElse: () => File(outputPath), // Fallback
-      );
-    } catch (e) {
-      onLog?.call('Error finding downloaded file: $e');
-      actualFile = File(outputPath);
+    final ingestResult = EngineUrlIngestResult.fromJson(
+      completed.result ?? const {},
+    );
+    final mediaPath = ingestResult.mediaPath;
+    if (mediaPath == null || mediaPath.isEmpty) {
+      throw StateError('Engine ingest completed without a media path');
     }
+    final actualFile = File(mediaPath);
 
-    // Save metadata using the ACTUAL filename
-    onLog?.call('Fetching metadata...');
-    try {
-      final meta = await toolRunner.getYouTubeMetadata(url);
-      final metaFile = File('${actualFile.path}.meta.json');
-      await metaFile.writeAsString(jsonEncode(meta));
-      onLog?.call('Metadata saved to ${metaFile.path}');
-    } catch (e) {
-      onLog?.call('Failed to save metadata: $e');
-    }
+    final meta = <String, dynamic>{
+      ...ingestResult.metadata,
+      'webpage_url': ingestResult.url.isEmpty ? url : ingestResult.url,
+    };
+    final metaFile = File('${actualFile.path}.meta.json');
+    await metaFile.writeAsString(jsonEncode(meta));
+    onLog?.call('Metadata saved to ${metaFile.path}');
 
     onLog?.call('Downloading transcript...');
-    // Transcript should use the base name so it matches the expected pattern.
-    // Repo expects: videoPath (minus extension) + .en.vtt
-    // If video is foo.webm, repo looks for foo.en.vtt
-    // So we download to outputPath (which is 'foo')
     try {
-      await toolRunner.downloadTranscript(url, outputPath, 'en');
-      onLog?.call('Transcript downloaded.');
+      final transcriptPath = actualFile.path.replaceAll(
+        p.extension(actualFile.path),
+        '.vtt',
+      );
+      final transcriptJob = await engineClient.startTranscriptDownload(
+        url: url,
+        outputPath: transcriptPath,
+        language: 'en',
+      );
+      final transcriptCompleted = await _waitForJob(
+        transcriptJob,
+        onLog: onLog,
+      );
+      if (transcriptCompleted.status == 'succeeded') {
+        final transcript = EngineTranscriptDownloadResult.fromJson(
+          transcriptCompleted.result ?? const {},
+        );
+        onLog?.call(
+          'Transcript downloaded: ${transcript.transcriptPath ?? transcriptPath}',
+        );
+      } else {
+        onLog?.call(
+          'Transcript download failed: ${transcriptCompleted.error ?? transcriptCompleted.status}',
+        );
+      }
     } catch (e) {
       onLog?.call('Transcript download failed: $e');
     }
@@ -113,5 +110,36 @@ class MediaService {
 
     // Copy to workspace to keep things contained
     return sourceFile.copy(destPath);
+  }
+
+  Future<EngineJob> _waitForJob(
+    EngineJob started, {
+    void Function(String)? onLog,
+  }) async {
+    var job = started;
+    final seenLogs = <String>{};
+    final deadline = DateTime.now().add(jobTimeout);
+
+    while (!job.isTerminal) {
+      for (final line in job.logs) {
+        if (seenLogs.add(line)) onLog?.call(line);
+      }
+      if (DateTime.now().isAfter(deadline)) {
+        throw TimeoutException('Engine job timed out: ${job.id}', jobTimeout);
+      }
+      await Future<void>.delayed(pollInterval);
+      job = await engineClient.getJob(job.id);
+      try {
+        final logs = await engineClient.getJobLogs(job.id);
+        for (final line in logs.logs) {
+          if (seenLogs.add(line)) onLog?.call(line);
+        }
+      } catch (_) {}
+    }
+
+    for (final line in job.logs) {
+      if (seenLogs.add(line)) onLog?.call(line);
+    }
+    return job;
   }
 }

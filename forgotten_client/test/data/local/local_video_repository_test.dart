@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:forgotten_client/data/local/engine_client.dart';
 import 'package:forgotten_client/data/local/local_video_repository.dart';
 import 'package:forgotten_client/data/local/tool_runner.dart';
 import 'package:forgotten_client_api/forgotten_client_api.dart';
@@ -18,25 +19,6 @@ class _FakePathProvider extends PathProviderPlatform {
 }
 
 class _FakeToolRunner extends ToolRunner {
-  _FakeToolRunner({required this.mediaInfo});
-
-  final Map<String, dynamic> mediaInfo;
-  final List<String> thumbnailRequests = [];
-  final List<String> mediaInfoRequests = [];
-
-  @override
-  Future<Map<String, dynamic>> getMediaInfo(String path) async {
-    mediaInfoRequests.add(path);
-    return mediaInfo;
-  }
-
-  @override
-  Future<void> generateThumbnail(String videoPath, String thumbnailPath) async {
-    thumbnailRequests.add(thumbnailPath);
-    final file = File(thumbnailPath);
-    await file.create(recursive: true);
-  }
-
   @override
   Future<ProcessResult> run(
     String executable,
@@ -54,9 +36,48 @@ class _FakeToolRunner extends ToolRunner {
   }) async* {}
 }
 
+class _FakeEngineTransport implements EngineJsonTransport {
+  final List<Map<String, dynamic>?> requests = [];
+
+  @override
+  Future<EngineHttpResponse> request(
+    String method,
+    Uri uri, {
+    Map<String, dynamic>? body,
+  }) async {
+    requests.add(body);
+    final json = switch (uri.path) {
+      '/v1/media/probe' => {
+        'metadata': {
+          'path': body?['path'],
+          'duration_seconds': 95.0,
+          'width': 1920,
+          'height': 1080,
+          'format': 'mov,mp4,m4a,3gp,3g2,mj2',
+          'size_bytes': 4,
+        },
+      },
+      '/v1/media/thumbnail' => {'output_path': body?['output_path']},
+      '/v1/media/render-clip' => {'output_path': body?['output_path']},
+      _ => {'status': 'ok'},
+    };
+    final outputPath = body?['output_path']?.toString();
+    if (uri.path == '/v1/media/thumbnail' && outputPath != null) {
+      await File(outputPath).create(recursive: true);
+    }
+    return EngineHttpResponse(
+      statusCode: 200,
+      elapsed: Duration.zero,
+      json: json,
+      rawBody: json.toString(),
+    );
+  }
+}
+
 void main() {
   late Directory tempDir;
   late _FakeToolRunner toolRunner;
+  late _FakeEngineTransport engineTransport;
   late LocalVideoRepository repository;
   late PathProviderPlatform originalPathProvider;
 
@@ -65,17 +86,15 @@ void main() {
     tempDir = await Directory.systemTemp.createTemp('forgotten_videos_test');
     PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
 
-    toolRunner = _FakeToolRunner(
-      mediaInfo: {
-        'format': {'duration': '95.0'},
-        'streams': [
-          {'codec_type': 'video', 'width': 1920, 'height': 1080},
-        ],
-      },
-    );
+    toolRunner = _FakeToolRunner();
+    engineTransport = _FakeEngineTransport();
     final dio = Dio(BaseOptions(baseUrl: 'http://localhost'));
     repository = LocalVideoRepository(
       toolRunner: toolRunner,
+      engineClient: EngineClient(
+        baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+        transport: engineTransport,
+      ),
       videosApi: VideosApi(dio),
       uploadsApi: UploadsApi(dio),
       aiApi: AiApi(dio),
@@ -108,8 +127,18 @@ void main() {
       'older.mp4',
     ]);
     expect(items.first.duration, isNotNull);
-    expect(toolRunner.mediaInfoRequests.length, 2);
-    expect(toolRunner.thumbnailRequests.length, 2);
+    expect(
+      engineTransport.requests
+          .where((request) => request?.containsKey('path') ?? false)
+          .length,
+      2,
+    );
+    expect(
+      engineTransport.requests
+          .where((request) => request?.containsKey('output_path') ?? false)
+          .length,
+      2,
+    );
 
     // Sidecar files should be present for the latest item
     final thumbPath = '${newer.path}.thumb.jpg';

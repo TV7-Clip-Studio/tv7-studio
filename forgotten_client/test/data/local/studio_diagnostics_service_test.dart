@@ -26,17 +26,96 @@ class _FakeTransport implements EngineJsonTransport {
     Map<String, dynamic>? body,
   }) async {
     Map<String, dynamic> json;
+    int statusCode = 200;
     if (uri.path == '/health') {
       json = {'status': 'ok'};
     } else if (uri.path == '/v1/diagnostics') {
-      json = {'status': 'ready'};
+      json = {
+        'status': 'ready',
+        'runtime': {
+          'engine_version': '0.1.0',
+          'host': '127.0.0.1',
+          'port': 7070,
+        },
+        'capabilities': [
+          {
+            'name': 'probe',
+            'status': 'ready',
+            'required_tools': ['ffprobe'],
+          },
+          {
+            'name': 'thumbnail',
+            'status': 'ready',
+            'required_tools': ['ffmpeg'],
+          },
+          {
+            'name': 'render_clip',
+            'status': 'ready',
+            'required_tools': ['ffmpeg'],
+          },
+          {
+            'name': 'url_ingest',
+            'status': 'ready',
+            'required_tools': ['yt-dlp'],
+          },
+          {
+            'name': 'transcript',
+            'status': 'ready',
+            'required_tools': ['yt-dlp'],
+          },
+        ],
+        'tools': [
+          {
+            'name': 'ffprobe',
+            'available': true,
+            'version': 'ffprobe version 8.0',
+            'required_for': ['probe'],
+            'error': null,
+          },
+          {
+            'name': 'ffmpeg',
+            'available': true,
+            'version': 'ffmpeg version 8.0',
+            'required_for': ['thumbnail', 'render_clip'],
+            'error': null,
+          },
+          {
+            'name': 'yt-dlp',
+            'available': true,
+            'version': 'yt-dlp 2026.01.01',
+            'required_for': ['url_ingest', 'transcript'],
+            'error': null,
+          },
+        ],
+        'work_dir': {'path': '/tmp/workspace', 'ready': true, 'error': null},
+      };
     } else if (uri.path.startsWith('/v1/media/')) {
       json = {'result': 'ok'};
+    } else if (uri.path == '/v1/ingest/url' ||
+        uri.path == '/v1/transcripts/download') {
+      json = {
+        'job': {
+          'id': 'job_fake',
+          'kind': uri.path.contains('ingest')
+              ? 'url_ingest'
+              : 'transcript_download',
+          'status': 'queued',
+          'progress': 0.0,
+          'logs': ['queued'],
+          'result': null,
+          'error': null,
+          'cancel_requested': false,
+        },
+      };
+      statusCode = 202;
+    } else if (uri.path.startsWith('/v1/jobs/')) {
+      json = {'error': 'JOB_NOT_FOUND', 'message': 'job not found'};
+      statusCode = 404;
     } else {
       throw StateError('unexpected ${uri.path}');
     }
     return EngineHttpResponse(
-      statusCode: 200,
+      statusCode: statusCode,
       elapsed: Duration.zero,
       json: json,
       rawBody: json.toString(),
@@ -51,6 +130,15 @@ class _BackendAdapter implements HttpClientAdapter {
     Stream<List<int>>? requestStream,
     Future<dynamic>? cancelFuture,
   ) async {
+    if (options.path.contains('/auth/license')) {
+      return ResponseBody.fromString(
+        '{"plan": "pro", "license_token": "token_abc", "expires_at": "2026-12-31T23:59:59Z"}',
+        200,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
+    }
     return ResponseBody.fromString('[]', 200);
   }
 
@@ -112,8 +200,31 @@ void main() {
       );
       expect(
         snapshot.checks.map((check) => check.name),
+        contains('Engine capability: url_ingest'),
+      );
+      expect(
+        snapshot.checks.map((check) => check.name),
+        contains('Engine capability: transcript'),
+      );
+      expect(
+        snapshot.checks.map((check) => check.name),
+        contains('Engine tool: yt-dlp'),
+      );
+      expect(
+        snapshot.checks.map((check) => check.name),
         contains('Backend /api/v1/users/'),
       );
+      expect(
+        snapshot.checks.map((check) => check.name),
+        contains('User License'),
+      );
+      final licenseCheck = snapshot.checks.firstWhere(
+        (c) => c.name == 'User License',
+      );
+      expect(licenseCheck.status, DiagnosticCheckStatus.ready);
+      expect(licenseCheck.detail, contains('Plan: PRO'));
+      expect(licenseCheck.detail, contains('Expires: 2026-12-31'));
+
       expect(snapshot.settings['Flavor'], 'test');
       expect(snapshot.recentErrors.single.source, 'test source');
     },
@@ -148,6 +259,15 @@ void main() {
     expect(
       results.map((result) => result.path),
       contains('/v1/media/thumbnail'),
+    );
+    expect(results.map((result) => result.path), contains('/v1/ingest/url'));
+    expect(
+      results.map((result) => result.path),
+      contains('/v1/transcripts/download'),
+    );
+    expect(
+      results.map((result) => result.path),
+      contains('/v1/jobs/smoke_test_non_existent'),
     );
     expect(
       results

@@ -3,8 +3,10 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
+import 'package:forgotten_client/data/local/engine_client.dart';
 import 'package:forgotten_client/data/local/tool_runner.dart';
 import 'package:forgotten_client_api/forgotten_client_api.dart' as api;
 import 'package:path/path.dart' as p;
@@ -21,6 +23,7 @@ class VideoItem {
     this.title,
     this.isClip = false,
     this.parentBasename,
+    this.synced = false,
   });
   final File file;
   final String? thumbnailPath;
@@ -31,6 +34,7 @@ class VideoItem {
   final String? title;
   final bool isClip;
   final String? parentBasename;
+  final bool synced;
 }
 
 class TranscriptResult {
@@ -39,9 +43,285 @@ class TranscriptResult {
   final String? languageCode;
 }
 
+class VttCue {
+  VttCue({required this.start, required this.end, required this.text});
+  final double start;
+  final double end;
+  final String text;
+}
+
+List<VttCue> parseVttCues(String vttContent) {
+  final cues = <VttCue>[];
+  final blocks = vttContent.replaceAll('\r\n', '\n').split('\n\n');
+  for (final block in blocks) {
+    final trimmedBlock = block.trim();
+    if (trimmedBlock.isEmpty) continue;
+    final lines = trimmedBlock.split('\n');
+    String? timingLine;
+    final textLines = <String>[];
+    for (final line in lines) {
+      if (line.contains('-->')) {
+        timingLine = line;
+      } else if (timingLine != null) {
+        textLines.add(line);
+      }
+    }
+    if (timingLine == null) continue;
+    final parts = timingLine.split('-->');
+    if (parts.length != 2) continue;
+    final start = _parseTimestamp(parts[0]);
+    final end = _parseTimestamp(parts[1]);
+    final text = textLines.join(' ').replaceAll(RegExp(r'<[^>]*>'), '').trim();
+    if (text.isEmpty) continue;
+    cues.add(VttCue(start: start, end: end, text: text));
+  }
+  return cues;
+}
+
+double _parseTimestamp(String ts) {
+  final cleanTs = ts.trim().split(' ').first;
+  final parts = cleanTs.split(':');
+  if (parts.length == 3) {
+    final hrs = double.tryParse(parts[0]) ?? 0.0;
+    final mins = double.tryParse(parts[1]) ?? 0.0;
+    final secsParts = parts[2].split('.');
+    final secs = double.tryParse(secsParts[0]) ?? 0.0;
+    final ms = secsParts.length > 1
+        ? (double.tryParse(secsParts[1]) ?? 0.0)
+        : 0.0;
+    return hrs * 3600.0 + mins * 60.0 + secs + (ms / 1000.0);
+  } else if (parts.length == 2) {
+    final mins = double.tryParse(parts[0]) ?? 0.0;
+    final secsParts = parts[1].split('.');
+    final secs = double.tryParse(secsParts[0]) ?? 0.0;
+    final ms = secsParts.length > 1
+        ? (double.tryParse(secsParts[1]) ?? 0.0)
+        : 0.0;
+    return mins * 60.0 + secs + (ms / 1000.0);
+  }
+  return 0.0;
+}
+
+List<List<double>> calculateTimelineGaps(
+  List<api.SuggestedClip> existingClips,
+  double totalDuration,
+) {
+  final intervals = existingClips
+      .map((c) => [c.startSec.toDouble(), c.endSec.toDouble()])
+      .toList();
+  intervals.sort((a, b) => a[0].compareTo(b[0]));
+
+  final merged = <List<double>>[];
+  for (final interval in intervals) {
+    if (merged.isEmpty) {
+      merged.add([interval[0], interval[1]]);
+    } else {
+      final last = merged.last;
+      if (interval[0] <= last[1]) {
+        last[1] = math.max(last[1], interval[1]);
+      } else {
+        merged.add([interval[0], interval[1]]);
+      }
+    }
+  }
+
+  final gaps = <List<double>>[];
+  double current = 0.0;
+  for (final interval in merged) {
+    if (interval[0] > current) {
+      gaps.add([current, interval[0]]);
+    }
+    current = math.max(current, interval[1]);
+  }
+  if (current < totalDuration) {
+    gaps.add([current, totalDuration]);
+  }
+  return gaps;
+}
+
+List<api.SuggestedClip> segmentCuesIntoHighlights(
+  List<VttCue> cues,
+  double targetDuration,
+  List<List<double>> targetGaps,
+  String videoTitle,
+) {
+  final clips = <api.SuggestedClip>[];
+
+  for (final gap in targetGaps) {
+    final gapStart = gap[0];
+    final gapEnd = gap[1];
+
+    final gapCues = cues
+        .where((c) => c.start >= gapStart && c.end <= gapEnd)
+        .toList();
+    if (gapCues.isEmpty) {
+      final gapDuration = gapEnd - gapStart;
+      if (gapDuration >= 8.0) {
+        int numClips = (gapDuration / targetDuration).round();
+        if (numClips < 1) numClips = 1;
+        final clipLen = gapDuration / numClips;
+        for (int i = 0; i < numClips; i++) {
+          final start = (gapStart + i * clipLen).floor();
+          final end = (gapStart + (i + 1) * clipLen).ceil();
+          final hook = "Segment ${start}s - ${end}s";
+          final desc =
+              "Local highlight segment from $videoTitle covering timeline from $start to $end.";
+          clips.add(
+            api.SuggestedClip(
+              startSec: start,
+              endSec: end,
+              title: hook,
+              description: desc,
+              hook: hook,
+            ),
+          );
+        }
+      }
+      continue;
+    }
+
+    int cueIndex = 0;
+    while (cueIndex < gapCues.length) {
+      final currentSegmentCues = <VttCue>[];
+      double startTime = gapCues[cueIndex].start;
+      double endTime = gapCues[cueIndex].end;
+
+      while (cueIndex < gapCues.length) {
+        final cue = gapCues[cueIndex];
+        currentSegmentCues.add(cue);
+        endTime = cue.end;
+        cueIndex++;
+
+        if (endTime - startTime >= targetDuration) {
+          if (cueIndex < gapCues.length) {
+            final nextCue = gapCues[cueIndex];
+            final text = cue.text.trim();
+            final endsWithPunctuation =
+                text.endsWith('.') || text.endsWith('?') || text.endsWith('!');
+            if (!endsWithPunctuation &&
+                (nextCue.end - startTime) < targetDuration + 5.0) {
+              currentSegmentCues.add(nextCue);
+              endTime = nextCue.end;
+              cueIndex++;
+            }
+          }
+          break;
+        }
+      }
+
+      if (currentSegmentCues.isEmpty) continue;
+
+      final startSec = startTime.floor();
+      final endSec = endTime.ceil();
+      final dialogueText = currentSegmentCues.map((c) => c.text).join(' ');
+
+      final generated = generateHookAndPost(
+        dialogueText,
+        videoTitle,
+        startSec,
+        endSec,
+      );
+
+      clips.add(
+        api.SuggestedClip(
+          startSec: startSec,
+          endSec: endSec,
+          title: generated['title']!,
+          description: generated['description']!,
+          hook: generated['title']!,
+        ),
+      );
+    }
+  }
+
+  return clips;
+}
+
+Map<String, String> generateHookAndPost(
+  String dialogue,
+  String videoTitle,
+  int startSec,
+  int endSec,
+) {
+  String title = "";
+  final questionRegex = RegExp(r'([^.!?]*\?[^.!?]*)', caseSensitive: false);
+  final questionMatch = questionRegex.firstMatch(dialogue);
+  if (questionMatch != null) {
+    final rawQ = questionMatch.group(0)!.trim();
+    if (rawQ.split(' ').length >= 3 && rawQ.split(' ').length <= 10) {
+      title = "${_cleanText(rawQ)} 😮";
+    }
+  }
+
+  if (title.isEmpty) {
+    final exclamationRegex = RegExp(r'([^.!?]*\![^.!?]*)');
+    final exclamationMatch = exclamationRegex.firstMatch(dialogue);
+    if (exclamationMatch != null) {
+      final rawEx = exclamationMatch.group(0)!.trim();
+      if (rawEx.split(' ').length >= 3 && rawEx.split(' ').length <= 10) {
+        title = "${_cleanText(rawEx)} 🔥";
+      }
+    }
+  }
+
+  if (title.isEmpty) {
+    final words = dialogue
+        .replaceAll(RegExp(r'[^\w\s]'), '')
+        .trim()
+        .split(RegExp(r'\s+'));
+    if (words.length >= 4) {
+      final phrase = words.take(math.min(6, words.length)).join(' ');
+      title = "${_capitalize(phrase)}... ⏳";
+    } else {
+      title = "Highlight from $videoTitle! 🎬";
+    }
+  }
+
+  if (title.length > 60) {
+    title = "${title.substring(0, 57)}...";
+  }
+
+  final startLabel = _formatSeconds(startSec);
+  final endLabel = _formatSeconds(endSec);
+  final cleanDialogue = dialogue.length > 150
+      ? "${dialogue.substring(0, 147)}..."
+      : dialogue;
+
+  final description =
+      "👀 Must-watch highlight from our latest video: \"$videoTitle\"!\n\n"
+      "Here is a key moment covering the conversation from $startLabel to $endLabel:\n"
+      "\"$cleanDialogue\"\n\n"
+      "🔥 Check out the full video on our channel for more details! #highlights #clips #content #shorts";
+
+  return {'title': title, 'description': description};
+}
+
+String _cleanText(String text) {
+  var cleaned = text.trim();
+  if (cleaned.startsWith('"') || cleaned.startsWith('\'')) {
+    cleaned = cleaned.substring(1);
+  }
+  if (cleaned.endsWith('"') || cleaned.endsWith('\'')) {
+    cleaned = cleaned.substring(0, cleaned.length - 1);
+  }
+  return cleaned;
+}
+
+String _capitalize(String text) {
+  if (text.isEmpty) return text;
+  return text[0].toUpperCase() + text.substring(1);
+}
+
+String _formatSeconds(int totalSecs) {
+  final mins = totalSecs ~/ 60;
+  final secs = totalSecs % 60;
+  return "$mins:${secs.toString().padLeft(2, '0')}";
+}
+
 class ClientVideoRepository {
   ClientVideoRepository({
     required ToolRunner toolRunner,
+    required this.engineClient,
     required this.videosApi,
     required this.uploadsApi,
     required this.aiApi,
@@ -49,6 +329,7 @@ class ClientVideoRepository {
   }) : runner = toolRunner;
 
   final ToolRunner runner;
+  final EngineClient engineClient;
   final api.VideosApi videosApi;
   final api.UploadsApi uploadsApi;
   final api.AiApi aiApi;
@@ -107,9 +388,16 @@ class ClientVideoRepository {
       throw Exception('No subtitles available to download');
     }
 
-    // Remove extension for the base path
-    final transcriptBase = videoPath.replaceAll(p.extension(videoPath), '');
-    await runner.downloadTranscript(url, transcriptBase, lang);
+    final transcriptPath = videoPath.replaceAll(p.extension(videoPath), '.vtt');
+    final job = await engineClient.startTranscriptDownload(
+      url: url,
+      outputPath: transcriptPath,
+      language: lang,
+    );
+    final completed = await _waitForEngineJob(job);
+    if (completed.status != 'succeeded') {
+      throw Exception(completed.error ?? 'Transcript job ${completed.status}');
+    }
   }
 
   Future<TranscriptResult?> getTranscript(String videoPath) async {
@@ -162,30 +450,144 @@ class ClientVideoRepository {
     String? transcriptLanguage,
     String? prompt,
     int? maxClips,
+    String? videoPath,
+    String? durationPreset,
+    bool gapsOnly = true,
   }) async {
-    try {
-      final response = await aiApi.generateHighlightsApiV1AiHighlightsPost(
-        highlightRequest: api.HighlightRequest(
-          transcript: transcript,
-          durationSeconds: durationSeconds,
-          transcriptLanguage: transcriptLanguage,
-          prompt: prompt,
-          maxClips: maxClips,
-        ),
-      );
-      final data = response.data;
-      if (data == null) {
-        throw Exception('Highlight detection returned empty payload');
+    if (videoPath != null) {
+      try {
+        final base = videoPath.replaceAll(p.extension(videoPath), '');
+        final vttCandidates = Directory(p.dirname(videoPath))
+            .listSync()
+            .whereType<File>()
+            .where(
+              (f) =>
+                  f.path.startsWith(base) &&
+                  f.path.toLowerCase().endsWith('.vtt'),
+            )
+            .toList();
+
+        if (vttCandidates.isNotEmpty) {
+          final vttFile = vttCandidates.first;
+          final vttContent = await vttFile.readAsString();
+          final cues = parseVttCues(vttContent);
+
+          if (cues.isNotEmpty) {
+            double targetDuration = 35.0; // default
+            if (durationPreset == 'short') {
+              targetDuration = 12.0;
+            } else if (durationPreset == 'medium') {
+              targetDuration = 35.0;
+            } else if (durationPreset == 'long') {
+              targetDuration = 75.0;
+            } else {
+              targetDuration = (durationSeconds / 5.0).clamp(10.0, 60.0);
+            }
+
+            final existingClips = await loadLocalClipsForSource(videoPath);
+            final videoTitle = p.basenameWithoutExtension(videoPath);
+
+            final targetGaps = <List<double>>[];
+            if (gapsOnly && existingClips.isNotEmpty) {
+              targetGaps.addAll(
+                calculateTimelineGaps(
+                  existingClips,
+                  durationSeconds.toDouble(),
+                ),
+              );
+            } else {
+              targetGaps.add([0.0, durationSeconds.toDouble()]);
+            }
+
+            final localClips = segmentCuesIntoHighlights(
+              cues,
+              targetDuration,
+              targetGaps,
+              videoTitle,
+            );
+            if (localClips.isNotEmpty) {
+              return api.HighlightResponse(clips: localClips);
+            }
+          }
+        }
+      } catch (e, stackTrace) {
+        developer.log(
+          'Smart local highlight generation failed, falling back to smart split',
+          error: e,
+          stackTrace: stackTrace,
+        );
       }
-      return data;
-    } catch (e, stackTrace) {
-      developer.log(
-        'Highlight detection error',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      rethrow;
     }
+
+    try {
+      final double targetDuration = durationPreset == 'short'
+          ? 12.0
+          : durationPreset == 'medium'
+          ? 35.0
+          : durationPreset == 'long'
+          ? 75.0
+          : 35.0;
+
+      final existingClips = videoPath != null
+          ? await loadLocalClipsForSource(videoPath)
+          : <api.SuggestedClip>[];
+      final videoTitle = videoPath != null
+          ? p.basenameWithoutExtension(videoPath)
+          : 'Video';
+
+      final targetGaps = <List<double>>[];
+      if (gapsOnly && existingClips.isNotEmpty) {
+        targetGaps.addAll(
+          calculateTimelineGaps(existingClips, durationSeconds.toDouble()),
+        );
+      } else {
+        targetGaps.add([0.0, durationSeconds.toDouble()]);
+      }
+
+      final localClips = <api.SuggestedClip>[];
+      for (final gap in targetGaps) {
+        final gapDuration = gap[1] - gap[0];
+        if (gapDuration < 8.0) continue;
+        int numClips = (gapDuration / targetDuration).round();
+        if (numClips < 1) numClips = 1;
+        final clipLen = gapDuration / numClips;
+        for (int i = 0; i < numClips; i++) {
+          final start = (gap[0] + i * clipLen).floor();
+          final end = (gap[0] + (i + 1) * clipLen).ceil();
+          final hook = "Segment ${start}s - ${end}s 🎬";
+          final desc =
+              "Local highlight segment from $videoTitle covering timeline from $start to $end.";
+          localClips.add(
+            api.SuggestedClip(
+              startSec: start,
+              endSec: end,
+              title: hook,
+              description: desc,
+              hook: hook,
+            ),
+          );
+        }
+      }
+
+      if (localClips.isNotEmpty) {
+        return api.HighlightResponse(clips: localClips);
+      }
+    } catch (_) {}
+
+    final response = await aiApi.generateHighlightsApiV1AiHighlightsPost(
+      highlightRequest: api.HighlightRequest(
+        transcript: transcript,
+        durationSeconds: durationSeconds,
+        transcriptLanguage: transcriptLanguage,
+        prompt: prompt,
+        maxClips: maxClips,
+      ),
+    );
+    final data = response.data;
+    if (data == null) {
+      throw Exception('Highlight detection returned empty payload');
+    }
+    return data;
   }
 
   Future<List<api.SuggestedClip>> loadLocalClipsForSource(
@@ -252,6 +654,50 @@ class ClientVideoRepository {
     return clips;
   }
 
+  Future<Map<String, bool>> loadClipSyncStatus(String sourcePath) async {
+    final directory = File(sourcePath).parent;
+    if (!await directory.exists()) return {};
+
+    final sourceBase = p.basenameWithoutExtension(sourcePath);
+    final entities = await directory.list().toList();
+    final syncMap = <String, bool>{};
+
+    for (final entity in entities.whereType<File>()) {
+      final ext = p.extension(entity.path).toLowerCase();
+      if (!['.mp4', '.mkv', '.mov', '.avi', '.webm'].contains(ext)) continue;
+
+      final metaFile = File('${entity.path}.meta.json');
+      if (!await metaFile.exists()) continue;
+
+      try {
+        final meta =
+            jsonDecode(await metaFile.readAsString()) as Map<String, dynamic>;
+        final isClip = meta['is_clip'] as bool? ?? false;
+        final parent = meta['parent_basename'] as String?;
+        if (!isClip) continue;
+        final parentName =
+            parent ??
+            (() {
+              final name = p.basenameWithoutExtension(entity.path);
+              final index = name.indexOf('_clip_');
+              if (index != -1) return name.substring(0, index);
+              return null;
+            })();
+        if (parentName == null || parentName != sourceBase) continue;
+
+        final start = meta['start_sec'] as int?;
+        final end = meta['end_sec'] as int?;
+        if (start == null || end == null) continue;
+
+        final synced = meta['synced'] == true || meta['asset_url'] != null;
+        syncMap['${start}_${end}'] = synced;
+      } catch (_) {
+        continue;
+      }
+    }
+    return syncMap;
+  }
+
   String? _selectSubtitleLanguage(Map<String, dynamic> meta) {
     // Prefer explicit subtitles if present, then automatic captions.
     final subtitles = meta['subtitles'] as Map<String, dynamic>?;
@@ -316,7 +762,7 @@ class ClientVideoRepository {
         sourceUrl = metaSourceUrl;
       }
       title = meta['title'] as String?;
-      // Fallback to ffprobe tags
+      // Fallback to media container tags.
       if (title == null) {
         final format = meta['format'] as Map<String, dynamic>?;
         final tags = format?['tags'] as Map<String, dynamic>?;
@@ -324,26 +770,8 @@ class ClientVideoRepository {
       }
     }
 
-    // 2. If we have a remote URL but no title, fetch metadata from YouTube
-    if (sourceUrl.startsWith('http') && title == null) {
-      try {
-        final ytMeta = await runner.getYouTubeMetadata(sourceUrl);
-        title = ytMeta['title'] as String?;
-        // Update local meta with new info
-        if (meta == null) {
-          meta = ytMeta;
-        } else {
-          meta.addAll(ytMeta);
-        }
-        await metaFile.writeAsString(jsonEncode(meta));
-      } catch (e, stackTrace) {
-        developer.log(
-          'Failed to fetch YouTube metadata',
-          error: e,
-          stackTrace: stackTrace,
-        );
-      }
-    }
+    // Remote metadata is captured by Engine during URL ingest. Do not run
+    // yt-dlp directly from Studio if old metadata is incomplete.
 
     final stat = await item.file.stat();
 
@@ -465,7 +893,7 @@ class ClientVideoRepository {
     }
 
     try {
-      final info = await runner.getMediaInfo(path);
+      final info = await probeMediaInfo(path);
       final format = info['format'] as Map<String, dynamic>?;
       final formatDuration = format?['duration'];
       if (formatDuration != null) {
@@ -474,6 +902,45 @@ class ClientVideoRepository {
       }
     } catch (_) {}
     return null;
+  }
+
+  Future<Map<String, dynamic>> probeMediaInfo(String path) async {
+    final metadata = await engineClient.probeMedia(path);
+    return metadata.toFfprobeLikeJson();
+  }
+
+  Future<void> generateThumbnail(String videoPath, String thumbnailPath) async {
+    await engineClient.generateThumbnail(
+      inputPath: videoPath,
+      outputPath: thumbnailPath,
+    );
+  }
+
+  Future<void> renderClip(
+    String videoPath,
+    double startSeconds,
+    double endSeconds,
+    String outputPath,
+  ) async {
+    await engineClient.renderClip(
+      inputPath: videoPath,
+      outputPath: outputPath,
+      startSeconds: startSeconds,
+      endSeconds: endSeconds,
+    );
+  }
+
+  Future<EngineJob> _waitForEngineJob(EngineJob started) async {
+    var job = started;
+    final deadline = DateTime.now().add(const Duration(minutes: 10));
+    while (!job.isTerminal) {
+      if (DateTime.now().isAfter(deadline)) {
+        throw Exception('Engine job timed out: ${job.id}');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      job = await engineClient.getJob(job.id);
+    }
+    return job;
   }
 
   Future<VideoItem> _enrichVideo(File file) async {
@@ -501,7 +968,7 @@ class ClientVideoRepository {
 
     if (meta == null) {
       try {
-        meta = await runner.getMediaInfo(file.path);
+        meta = await probeMediaInfo(file.path);
         await metaFile.writeAsString(jsonEncode(meta));
         final format = meta['format'] as Map<String, dynamic>?;
         final tags = format?['tags'] as Map<String, dynamic>?;
@@ -514,7 +981,7 @@ class ClientVideoRepository {
     // 2. Thumbnail
     if (!await thumbFile.exists()) {
       try {
-        await runner.generateThumbnail(file.path, thumbFile.path);
+        await generateThumbnail(file.path, thumbFile.path);
       } catch (e) {
         // print('Failed to generate thumbnail for ${file.path}: $e');
       }
@@ -528,14 +995,32 @@ class ClientVideoRepository {
     if (meta != null) {
       sourceUrl = meta['webpage_url'] as String?;
       backendId = meta['backend_id'] as int?;
-      try {
-        final format = meta['format'] as Map<String, dynamic>?;
-        final formatDuration = format?['duration'];
-        if (formatDuration != null) {
-          final seconds = double.tryParse(formatDuration.toString()) ?? 0;
-          final d = Duration(seconds: seconds.toInt());
+
+      // Try top-level duration field first (common in yt-dlp metadata)
+      final rawDuration = meta['duration'];
+      if (rawDuration is num) {
+        final d = Duration(seconds: rawDuration.toInt());
+        duration =
+            '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+      } else if (rawDuration is String) {
+        final parsed = double.tryParse(rawDuration);
+        if (parsed != null) {
+          final d = Duration(seconds: parsed.toInt());
           duration =
               '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+        }
+      }
+
+      try {
+        if (duration == null || duration.isEmpty) {
+          final format = meta['format'] as Map<String, dynamic>?;
+          final formatDuration = format?['duration'];
+          if (formatDuration != null) {
+            final seconds = double.tryParse(formatDuration.toString()) ?? 0;
+            final d = Duration(seconds: seconds.toInt());
+            duration =
+                '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+          }
         }
 
         final streams = (meta['streams'] as List<dynamic>?)
@@ -569,6 +1054,11 @@ class ClientVideoRepository {
       }
     }
 
+    final synced = isClip
+        ? (meta != null &&
+              (meta['synced'] == true || meta['asset_url'] != null))
+        : (backendId != null);
+
     return VideoItem(
       file: file,
       thumbnailPath: await thumbFile.exists() ? thumbFile.path : null,
@@ -579,6 +1069,7 @@ class ClientVideoRepository {
       title: title,
       isClip: isClip,
       parentBasename: parentBasename,
+      synced: synced,
     );
   }
 

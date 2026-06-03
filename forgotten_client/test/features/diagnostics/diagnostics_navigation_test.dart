@@ -156,6 +156,10 @@ void main() {
           configRepository: ConfigRepository(config),
           localVideoRepository: ClientVideoRepository(
             toolRunner: ToolRunner(),
+            engineClient: EngineClient(
+              baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+              transport: _FakeEngineTransport(),
+            ),
             videosApi: VideosApi(dio),
             uploadsApi: UploadsApi(dio),
             aiApi: AiApi(dio),
@@ -197,7 +201,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Runtime checks'), findsOneWidget);
-    expect(find.text('Engine /health'), findsOneWidget);
+    expect(find.text('Local Media Engine'), findsOneWidget);
+    expect(find.text('Health API'), findsOneWidget);
   });
 }

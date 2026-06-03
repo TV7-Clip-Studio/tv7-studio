@@ -193,6 +193,7 @@ class _ShellState extends State<_Shell> with WidgetsBindingObserver {
     _aiApi = AiApi(_dio);
     _localVideoRepository = ClientVideoRepository(
       toolRunner: ToolRunner(),
+      engineClient: widget.engineClient,
       videosApi: _videosApi,
       uploadsApi: _uploadsApi,
       aiApi: _aiApi,
