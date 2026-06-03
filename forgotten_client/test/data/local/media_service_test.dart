@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:forgotten_client/data/local/engine_client.dart';
+import 'package:forgotten_client/data/local/engine_job_poller.dart';
 import 'package:forgotten_client/data/local/media_service.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -164,7 +165,11 @@ void main() {
           baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
           transport: transport,
         ),
-        pollInterval: Duration.zero,
+        pollingPolicy: const EngineJobPollingPolicy(
+          initialInterval: Duration.zero,
+          maxInterval: Duration.zero,
+          timeout: Duration(seconds: 1),
+        ),
       );
       final logs = <String>[];
 
@@ -193,7 +198,11 @@ void main() {
         baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
         transport: _FakeEngineTransport(failIngest: true),
       ),
-      pollInterval: Duration.zero,
+      pollingPolicy: const EngineJobPollingPolicy(
+        initialInterval: Duration.zero,
+        maxInterval: Duration.zero,
+        timeout: Duration(seconds: 1),
+      ),
     );
 
     expect(

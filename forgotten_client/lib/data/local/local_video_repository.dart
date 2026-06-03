@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:forgotten_client/data/local/engine_client.dart';
+import 'package:forgotten_client/data/local/engine_job_poller.dart';
 import 'package:forgotten_client/data/local/tool_runner.dart';
 import 'package:forgotten_client_api/forgotten_client_api.dart' as api;
 import 'package:path/path.dart' as p;
@@ -326,7 +327,12 @@ class ClientVideoRepository {
     required this.uploadsApi,
     required this.aiApi,
     required this.dio,
-  }) : runner = toolRunner;
+    EngineJobPoller? jobPoller,
+    EngineJobPollingPolicy pollingPolicy = const EngineJobPollingPolicy(),
+  }) : runner = toolRunner,
+       _jobPoller =
+           jobPoller ??
+           EngineJobPoller(engineClient: engineClient, policy: pollingPolicy);
 
   final ToolRunner runner;
   final EngineClient engineClient;
@@ -334,6 +340,7 @@ class ClientVideoRepository {
   final api.UploadsApi uploadsApi;
   final api.AiApi aiApi;
   final Dio dio;
+  final EngineJobPoller _jobPoller;
 
   Future<Directory> get _workspace async {
     final appDocDir = await getApplicationDocumentsDirectory();
@@ -394,7 +401,7 @@ class ClientVideoRepository {
       outputPath: transcriptPath,
       language: lang,
     );
-    final completed = await _waitForEngineJob(job);
+    final completed = await _jobPoller.waitFor(job);
     if (completed.status != 'succeeded') {
       throw Exception(completed.error ?? 'Transcript job ${completed.status}');
     }
@@ -928,19 +935,6 @@ class ClientVideoRepository {
       startSeconds: startSeconds,
       endSeconds: endSeconds,
     );
-  }
-
-  Future<EngineJob> _waitForEngineJob(EngineJob started) async {
-    var job = started;
-    final deadline = DateTime.now().add(const Duration(minutes: 10));
-    while (!job.isTerminal) {
-      if (DateTime.now().isAfter(deadline)) {
-        throw Exception('Engine job timed out: ${job.id}');
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-      job = await engineClient.getJob(job.id);
-    }
-    return job;
   }
 
   Future<VideoItem> _enrichVideo(File file) async {

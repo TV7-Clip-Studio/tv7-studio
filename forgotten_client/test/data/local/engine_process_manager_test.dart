@@ -7,8 +7,11 @@ import 'package:forgotten_client/data/local/engine_process_manager.dart';
 import 'package:path/path.dart' as p;
 
 class _FakeProcess implements EngineProcess {
+  _FakeProcess({this.killResult = true});
+
   final _exitCode = Completer<int>();
   final List<ProcessSignal> signals = [];
+  final bool killResult;
 
   @override
   int get pid => 42;
@@ -19,10 +22,10 @@ class _FakeProcess implements EngineProcess {
   @override
   bool kill([ProcessSignal signal = ProcessSignal.sigterm]) {
     signals.add(signal);
-    if (!_exitCode.isCompleted) {
+    if (killResult && !_exitCode.isCompleted) {
       _exitCode.complete(0);
     }
-    return true;
+    return killResult;
   }
 }
 
@@ -96,6 +99,9 @@ void main() {
     tempDir = await Directory.systemTemp.createTemp('engine_manager_test');
     binary = File(p.join(tempDir.path, 'engine-service'));
     await binary.writeAsString('fake');
+    if (!Platform.isWindows) {
+      await Process.run('chmod', ['+x', binary.path]);
+    }
     workDir = Directory(p.join(tempDir.path, 'workspace'));
     await workDir.create();
   });
@@ -203,6 +209,23 @@ void main() {
     expect(launcher.startCount, 0);
   });
 
+  test('reports unavailable when binary path is not executable', () async {
+    if (Platform.isWindows) return;
+    await Process.run('chmod', ['-x', binary.path]);
+    final process = _FakeProcess();
+    final launcher = _FakeLauncher(process);
+    final manager = EngineProcessManager(
+      launcher: launcher,
+      transport: _FakeTransport(diagnostics: {'status': 'ready'}),
+    );
+
+    final result = await manager.start(config());
+
+    expect(result.status, EngineStartupStatus.unavailable);
+    expect(result.message, contains('not executable'));
+    expect(launcher.startCount, 0);
+  });
+
   test('stops the launched Engine process', () async {
     final process = _FakeProcess();
     final manager = EngineProcessManager(
@@ -212,6 +235,19 @@ void main() {
 
     await manager.start(config());
     await manager.stop();
+
+    expect(process.signals, [ProcessSignal.sigterm]);
+  });
+
+  test('stop returns when the Engine process cannot be signaled', () async {
+    final process = _FakeProcess(killResult: false);
+    final manager = EngineProcessManager(
+      launcher: _FakeLauncher(process),
+      transport: _FakeTransport(diagnostics: {'status': 'ready'}),
+    );
+
+    await manager.start(config());
+    await manager.stop().timeout(const Duration(milliseconds: 100));
 
     expect(process.signals, [ProcessSignal.sigterm]);
   });

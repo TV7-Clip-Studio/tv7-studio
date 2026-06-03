@@ -144,6 +144,21 @@ class EngineProcessManager {
         message: 'Engine binary not found at ${config.binaryPath}',
       );
     }
+    final binaryStat = await binary.stat();
+    if (binaryStat.type != FileSystemEntityType.file) {
+      return EngineStartupResult(
+        status: EngineStartupStatus.unavailable,
+        baseUri: config.baseUri,
+        message: 'Engine binary path is not a file: ${config.binaryPath}',
+      );
+    }
+    if (!Platform.isWindows && (binaryStat.mode & 0x49) == 0) {
+      return EngineStartupResult(
+        status: EngineStartupStatus.unavailable,
+        baseUri: config.baseUri,
+        message: 'Engine binary is not executable: ${config.binaryPath}',
+      );
+    }
 
     try {
       _process = await _launcher.start(
@@ -224,11 +239,17 @@ class EngineProcessManager {
     if (process == null) return;
 
     _process = null;
-    process.kill();
+    final didSignal = process.kill();
+    if (!didSignal) return;
     try {
       await process.exitCode.timeout(const Duration(seconds: 2));
     } on TimeoutException {
-      process.kill(ProcessSignal.sigkill);
+      final didForceSignal = process.kill(ProcessSignal.sigkill);
+      if (didForceSignal) {
+        try {
+          await process.exitCode.timeout(const Duration(seconds: 1));
+        } on TimeoutException {}
+      }
     }
   }
 }

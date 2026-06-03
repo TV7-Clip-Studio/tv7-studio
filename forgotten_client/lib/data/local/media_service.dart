@@ -1,23 +1,24 @@
 // ignore_for_file: avoid_slow_async_io
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:forgotten_client/data/local/engine_client.dart';
+import 'package:forgotten_client/data/local/engine_job_poller.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 class MediaService {
   MediaService({
     required this.engineClient,
-    this.pollInterval = const Duration(milliseconds: 250),
-    this.jobTimeout = const Duration(minutes: 30),
-  });
+    EngineJobPoller? jobPoller,
+    EngineJobPollingPolicy pollingPolicy = const EngineJobPollingPolicy(),
+  }) : _jobPoller =
+           jobPoller ??
+           EngineJobPoller(engineClient: engineClient, policy: pollingPolicy);
 
   final EngineClient engineClient;
-  final Duration pollInterval;
-  final Duration jobTimeout;
+  final EngineJobPoller _jobPoller;
 
   Future<Directory> get _workspace async {
     final appDocDir = await getApplicationDocumentsDirectory();
@@ -42,7 +43,7 @@ class MediaService {
       outputDir: workspace.path,
       outputTemplate: '$filename.%(ext)s',
     );
-    final completed = await _waitForJob(started, onLog: onLog);
+    final completed = await _jobPoller.waitFor(started, onLog: onLog);
     if (completed.status != 'succeeded') {
       throw StateError(
         completed.error == null || completed.error!.isEmpty
@@ -79,7 +80,7 @@ class MediaService {
         outputPath: transcriptPath,
         language: 'en',
       );
-      final transcriptCompleted = await _waitForJob(
+      final transcriptCompleted = await _jobPoller.waitFor(
         transcriptJob,
         onLog: onLog,
       );
@@ -110,36 +111,5 @@ class MediaService {
 
     // Copy to workspace to keep things contained
     return sourceFile.copy(destPath);
-  }
-
-  Future<EngineJob> _waitForJob(
-    EngineJob started, {
-    void Function(String)? onLog,
-  }) async {
-    var job = started;
-    final seenLogs = <String>{};
-    final deadline = DateTime.now().add(jobTimeout);
-
-    while (!job.isTerminal) {
-      for (final line in job.logs) {
-        if (seenLogs.add(line)) onLog?.call(line);
-      }
-      if (DateTime.now().isAfter(deadline)) {
-        throw TimeoutException('Engine job timed out: ${job.id}', jobTimeout);
-      }
-      await Future<void>.delayed(pollInterval);
-      job = await engineClient.getJob(job.id);
-      try {
-        final logs = await engineClient.getJobLogs(job.id);
-        for (final line in logs.logs) {
-          if (seenLogs.add(line)) onLog?.call(line);
-        }
-      } catch (_) {}
-    }
-
-    for (final line in job.logs) {
-      if (seenLogs.add(line)) onLog?.call(line);
-    }
-    return job;
   }
 }
