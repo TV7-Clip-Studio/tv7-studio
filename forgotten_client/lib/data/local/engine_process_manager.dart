@@ -146,12 +146,13 @@ class EngineProcessManager {
         message: 'Engine binary not found at ${config.binaryPath}',
       );
     }
-    final binaryStat = await binary.stat();
+    final resolvedBinaryPath = await _resolveBinaryPath(binary);
+    final binaryStat = await File(resolvedBinaryPath).stat();
     if (binaryStat.type != FileSystemEntityType.file) {
       return EngineStartupResult(
         status: EngineStartupStatus.unavailable,
         baseUri: config.baseUri,
-        message: 'Engine binary path is not a file: ${config.binaryPath}',
+        message: 'Engine binary path is not a file: $resolvedBinaryPath',
       );
     }
     if (!Platform.isWindows && (binaryStat.mode & _anyUnixExecutableBit) == 0) {
@@ -164,7 +165,7 @@ class EngineProcessManager {
 
     try {
       _process = await _launcher.start(
-        config.binaryPath,
+        resolvedBinaryPath,
         const [],
         environment: config.toEnvironment(),
         workingDirectory: config.workDir,
@@ -254,6 +255,15 @@ class EngineProcessManager {
           await process.exitCode.timeout(const Duration(seconds: 1));
         } on TimeoutException {}
       }
+    }
+  }
+
+  Future<String> _resolveBinaryPath(File binary) async {
+    if (Platform.isWindows) return binary.path;
+    try {
+      return await binary.resolveSymbolicLinks();
+    } on FileSystemException {
+      return binary.path;
     }
   }
 

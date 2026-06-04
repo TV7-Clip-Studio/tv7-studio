@@ -41,6 +41,15 @@ class EngineJobPoller {
         : DateTime.now().add(policy.timeout!);
     final seenLogs = <String>{};
 
+    void ensureWithinDeadline() {
+      if (deadline != null && DateTime.now().isAfter(deadline)) {
+        throw TimeoutException(
+          'Engine job timed out: ${job.id}',
+          policy.timeout,
+        );
+      }
+    }
+
     void emitLogs(Iterable<String> logs) {
       for (final line in logs) {
         if (seenLogs.add(line)) onLog?.call(line);
@@ -49,22 +58,19 @@ class EngineJobPoller {
 
     emitLogs(job.logs);
     while (!job.isTerminal) {
-      if (deadline != null && DateTime.now().isAfter(deadline)) {
-        throw TimeoutException(
-          'Engine job timed out: ${job.id}',
-          policy.timeout,
-        );
-      }
+      ensureWithinDeadline();
 
       if (interval > Duration.zero) {
         await _delay(interval);
       }
+      ensureWithinDeadline();
 
       try {
         job = await engineClient.getJob(job.id);
       } catch (error) {
         if (!_isRetryablePollingError(error)) rethrow;
         interval = _nextInterval(interval);
+        ensureWithinDeadline();
         continue;
       }
       emitLogs(job.logs);

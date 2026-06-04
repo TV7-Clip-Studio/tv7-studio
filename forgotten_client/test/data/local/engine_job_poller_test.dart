@@ -136,6 +136,30 @@ void main() {
     ]);
   });
 
+  test('stops retrying transient failures when explicit timeout expires', () {
+    final transport = _FakeEngineTransport([_jobJson('running')]);
+    final poller = EngineJobPoller(
+      engineClient: EngineClient(
+        baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+        transport: transport,
+      ),
+      policy: const EngineJobPollingPolicy(
+        initialInterval: Duration(milliseconds: 1),
+        maxInterval: Duration(milliseconds: 1),
+        timeout: Duration(milliseconds: 1),
+      ),
+      delay: (delay) async {
+        await Future<void>.delayed(delay);
+      },
+    );
+    transport.jobFailures = 100;
+
+    expect(
+      () => poller.waitFor(_job('queued')),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
+
   test('does not retry non-transient polling failures', () async {
     final transport = _FakeEngineTransport([]);
     final poller = EngineJobPoller(

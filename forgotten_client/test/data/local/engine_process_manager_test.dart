@@ -149,9 +149,10 @@ void main() {
       final result = await manager.start(
         config(ffmpegBin: '/bin/ffmpeg', ffprobeBin: '/bin/ffprobe'),
       );
+      final expectedExecutable = await binary.resolveSymbolicLinks();
 
       expect(result.status, EngineStartupStatus.ready);
-      expect(launcher.executable, binary.path);
+      expect(launcher.executable, expectedExecutable);
       expect(launcher.arguments, isEmpty);
       expect(launcher.workingDirectory, workDir.path);
       expect(launcher.environment, {
@@ -229,6 +230,32 @@ void main() {
     expect(result.status, EngineStartupStatus.unavailable);
     expect(result.message, contains('not executable'));
     expect(launcher.startCount, 0);
+  });
+
+  test('starts Engine through a symlinked binary path', () async {
+    if (Platform.isWindows) return;
+    final linkPath = p.join(tempDir.path, 'engine-link');
+    await Link(linkPath).create(binary.path);
+    final process = _FakeProcess();
+    final launcher = _FakeLauncher(process);
+    final manager = EngineProcessManager(
+      launcher: launcher,
+      transport: _FakeTransport(diagnostics: {'status': 'ready'}),
+    );
+
+    final result = await manager.start(
+      EngineSidecarConfig(
+        binaryPath: linkPath,
+        host: '127.0.0.1',
+        port: 7070,
+        workDir: workDir.path,
+        healthDelay: Duration.zero,
+      ),
+    );
+    final expectedExecutable = await binary.resolveSymbolicLinks();
+
+    expect(result.status, EngineStartupStatus.ready);
+    expect(launcher.executable, expectedExecutable);
   });
 
   test('stops the launched Engine process', () async {
