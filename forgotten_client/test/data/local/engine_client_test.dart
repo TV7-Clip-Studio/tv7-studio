@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -31,6 +32,17 @@ class _FakeTransport implements EngineJsonTransport {
       json: response,
       rawBody: response.toString(),
     );
+  }
+}
+
+class _TimeoutTransport implements EngineJsonTransport {
+  @override
+  Future<EngineHttpResponse> request(
+    String method,
+    Uri uri, {
+    Map<String, dynamic>? body,
+  }) {
+    throw TimeoutException('Engine request timed out');
   }
 }
 
@@ -160,6 +172,15 @@ void main() {
       () => client.probeMedia('/tmp/input.mp4'),
       throwsA(isA<EngineApiException>()),
     );
+  });
+
+  test('propagates transport timeouts from Engine requests', () async {
+    final client = EngineClient(
+      baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+      transport: _TimeoutTransport(),
+    );
+
+    expect(client.getHealth, throwsA(isA<TimeoutException>()));
   });
 
   test('startUrlIngest posts request and parses job', () async {
