@@ -1,8 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:forgotten_client/data/local/engine_client.dart';
+import 'package:forgotten_client/data/local/engine_job_poller.dart';
 import 'package:forgotten_client/data/local/media_service.dart';
-import 'package:forgotten_client/data/local/tool_runner.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
@@ -15,61 +16,110 @@ class _FakePathProvider extends PathProviderPlatform {
   Future<String?> getApplicationDocumentsPath() async => documentsPath;
 }
 
-class _FakeToolRunner extends ToolRunner {
-  _FakeToolRunner({this.streamLines = const [], this.exitCode = 0});
+class _FakeEngineTransport implements EngineJsonTransport {
+  _FakeEngineTransport({this.failIngest = false});
 
-  final List<String> streamLines;
-  final List<List<String>> runStreamArgs = [];
-  final List<String> runArgsExecutables = [];
-  final int exitCode;
+  final bool failIngest;
+  final requested = <Uri>[];
+  final bodies = <Map<String, dynamic>?>[];
+  String? mediaPath;
+  String? transcriptPath;
 
   @override
-  Future<ProcessResult> run(
-    String executable,
-    List<String> args, {
-    String? workingDirectory,
+  Future<EngineHttpResponse> request(
+    String method,
+    Uri uri, {
+    Map<String, dynamic>? body,
   }) async {
-    runArgsExecutables.add(executable);
-    return ProcessResult(0, 0, '', '');
-  }
+    requested.add(uri);
+    bodies.add(body);
 
-  @override
-  Stream<String> runStream(
-    String executable,
-    List<String> args, {
-    String? workingDirectory,
-  }) async* {
-    runStreamArgs.add(args);
-    String? outputPath;
-    final oIndex = args.indexOf('-o');
-    if (oIndex != -1 && oIndex + 1 < args.length) {
-      outputPath = args[oIndex + 1];
-    } else if (args.length >= 2) {
-      outputPath = args[1];
+    Map<String, dynamic> json;
+    var statusCode = 200;
+    switch (uri.path) {
+      case '/v1/ingest/url':
+        final outputDir =
+            body?['output_dir']?.toString() ?? Directory.systemTemp.path;
+        mediaPath = p.join(outputDir, 'download_1.mp4');
+        await File(mediaPath!).writeAsString('downloaded');
+        json = {
+          'job': {
+            'id': 'job_ingest',
+            'kind': 'url_ingest',
+            'status': 'queued',
+            'progress': 0.0,
+            'logs': ['queued'],
+            'result': null,
+            'error': null,
+            'cancel_requested': false,
+          },
+        };
+      case '/v1/jobs/job_ingest':
+        json = {
+          'id': 'job_ingest',
+          'kind': 'url_ingest',
+          'status': failIngest ? 'failed' : 'succeeded',
+          'progress': 1.0,
+          'logs': ['queued', 'completed'],
+          'result': failIngest
+              ? null
+              : {
+                  'url': 'https://example.com/video',
+                  'media_path': mediaPath,
+                  'metadata': {'title': 'Example'},
+                },
+          'error': failIngest ? 'download failed' : null,
+          'cancel_requested': false,
+        };
+      case '/v1/jobs/job_ingest/logs':
+        json = {
+          'job_id': 'job_ingest',
+          'logs': ['queued', 'completed'],
+        };
+      case '/v1/transcripts/download':
+        transcriptPath = body?['output_path']?.toString();
+        if (transcriptPath != null) {
+          await File(transcriptPath!).writeAsString('WEBVTT\n\nHello');
+        }
+        json = {
+          'job': {
+            'id': 'job_transcript',
+            'kind': 'transcript_download',
+            'status': 'queued',
+            'progress': 0.0,
+            'logs': ['queued transcript'],
+            'result': null,
+            'error': null,
+            'cancel_requested': false,
+          },
+        };
+      case '/v1/jobs/job_transcript':
+        json = {
+          'id': 'job_transcript',
+          'kind': 'transcript_download',
+          'status': 'succeeded',
+          'progress': 1.0,
+          'logs': ['queued transcript', 'completed'],
+          'result': {'transcript_path': transcriptPath, 'language': 'en'},
+          'error': null,
+          'cancel_requested': false,
+        };
+      case '/v1/jobs/job_transcript/logs':
+        json = {
+          'job_id': 'job_transcript',
+          'logs': ['queued transcript', 'completed'],
+        };
+      default:
+        statusCode = 404;
+        json = {'error': 'missing'};
     }
 
-    if (outputPath != null) {
-      final file = File(outputPath);
-      await file.parent.create(recursive: true);
-      await file.writeAsString('downloaded');
-    }
-    for (final line in streamLines) {
-      yield line;
-    }
-    if (exitCode != 0) {
-      throw ProcessException(executable, args, 'Exit code $exitCode', exitCode);
-    }
-  }
-
-  @override
-  Future<void> downloadTranscript(
-    String url,
-    String outputPath,
-    String language,
-  ) async {
-    final file = File('$outputPath.$language.vtt');
-    await file.parent.create(recursive: true);
-    await file.writeAsString('WEBVTT\n\n00:00.000 --> 00:01.000\nHello');
+    return EngineHttpResponse(
+      statusCode: statusCode,
+      elapsed: Duration.zero,
+      json: json,
+      rawBody: json.toString(),
+    );
   }
 }
 
@@ -91,7 +141,12 @@ void main() {
   test('prepareIngestFromFile copies source into workspace', () async {
     final source = File(p.join(tempDir.path, 'video.mp4'))
       ..writeAsStringSync('abc');
-    final service = MediaService(toolRunner: _FakeToolRunner());
+    final service = MediaService(
+      engineClient: EngineClient(
+        baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+        transport: _FakeEngineTransport(),
+      ),
+    );
 
     final ingested = await service.prepareIngestFromFile(source.path);
 
@@ -102,10 +157,20 @@ void main() {
   });
 
   test(
-    'prepareIngestFromUrl streams logs and returns downloaded file',
+    'prepareIngestFromUrl polls Engine jobs and returns downloaded file',
     () async {
-      final toolRunner = _FakeToolRunner(streamLines: ['line1', 'line2']);
-      final service = MediaService(toolRunner: toolRunner);
+      final transport = _FakeEngineTransport();
+      final service = MediaService(
+        engineClient: EngineClient(
+          baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+          transport: transport,
+        ),
+        pollingPolicy: const EngineJobPollingPolicy(
+          initialInterval: Duration.zero,
+          maxInterval: Duration.zero,
+          timeout: Duration(seconds: 1),
+        ),
+      );
       final logs = <String>[];
 
       final file = await service.prepareIngestFromUrl(
@@ -113,19 +178,36 @@ void main() {
         onLog: logs.add,
       );
 
-      expect(toolRunner.runStreamArgs, isNotEmpty);
-      expect(logs, containsAll(['line1', 'line2']));
+      expect(
+        transport.requested.map((uri) => uri.path),
+        contains('/v1/ingest/url'),
+      );
+      expect(
+        transport.requested.map((uri) => uri.path),
+        contains('/v1/jobs/job_ingest'),
+      );
       expect(file.existsSync(), isTrue);
+      expect(File('${file.path}.meta.json').existsSync(), isTrue);
+      expect(logs, contains('completed'));
     },
   );
 
-  test('prepareIngestFromUrl surfaces process failures', () async {
-    final toolRunner = _FakeToolRunner(streamLines: ['err'], exitCode: 1);
-    final service = MediaService(toolRunner: toolRunner);
+  test('prepareIngestFromUrl surfaces failed Engine jobs', () async {
+    final service = MediaService(
+      engineClient: EngineClient(
+        baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+        transport: _FakeEngineTransport(failIngest: true),
+      ),
+      pollingPolicy: const EngineJobPollingPolicy(
+        initialInterval: Duration.zero,
+        maxInterval: Duration.zero,
+        timeout: Duration(seconds: 1),
+      ),
+    );
 
     expect(
       () => service.prepareIngestFromUrl('https://example.com/bad'),
-      throwsA(isA<ProcessException>()),
+      throwsA(isA<StateError>()),
     );
   });
 }

@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:forgotten_client/data/auth/auth_repository.dart';
+import 'package:forgotten_client/data/local/diagnostics_log.dart';
 import 'package:forgotten_client_api/forgotten_client_api.dart';
 
 class UserPage extends StatefulWidget {
   const UserPage({
     required this.authRepository,
     required this.usersApi,
+    required this.diagnosticsLog,
+    required this.onOpenDiagnostics,
     required this.onLogout,
     super.key,
   });
 
   final AuthRepository authRepository;
   final UsersApi usersApi;
+  final DiagnosticsLog diagnosticsLog;
+  final VoidCallback onOpenDiagnostics;
   final VoidCallback onLogout;
 
   @override
@@ -45,6 +50,7 @@ class _UserPageState extends State<UserPage> {
         });
       }
     } catch (e) {
+      widget.diagnosticsLog.record('User directory', e);
       if (mounted) {
         setState(() {
           _error = e.toString();
@@ -102,20 +108,50 @@ class _UserPageState extends State<UserPage> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Failed to load directory',
+                        'Account data unavailable',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      Text(
-                        _error!,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
+                      const SizedBox(height: 8),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 520),
+                        child: Text(
+                          'Studio could not load the user directory. This is '
+                          'usually an API reachability or response schema issue.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 680),
+                        child: Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
                         ),
                       ),
                       const SizedBox(height: 24),
-                      FilledButton.tonalIcon(
-                        onPressed: _loadUsers,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Retry'),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          FilledButton.tonalIcon(
+                            onPressed: _loadUsers,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: widget.onOpenDiagnostics,
+                            icon: const Icon(Icons.monitor_heart_outlined),
+                            label: const Text('Diagnostics'),
+                          ),
+                        ],
                       ),
                     ],
                   ),

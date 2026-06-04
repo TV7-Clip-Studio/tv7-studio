@@ -9,7 +9,7 @@ Unofficial Flutter client for the `forgotten-app` backend, focused on local-firs
 ## Quick objectives
 - Single Flutter codebase for desktop/mobile.
 - Local-heavy media pipeline to keep cloud costs low; backend handles auth/metadata/optional publishing.
-- Pluggable local tools (`ffmpeg`, `yt-dlp`, optional `whisper.cpp`) with user-provided paths or bundled binaries per platform.
+- Local media compute runs through the TV7 Engine sidecar; Studio launches and talks to the sidecar over loopback HTTP.
 - Configurable highlight path: backend/OpenAI vs optional local small model.
 
 ## Docs
@@ -34,6 +34,23 @@ From `forgotten_client/`:
 - Dev: `flutter run --flavor dev --dart-define-from-file=.env.dev`
 - Stage: `flutter run --flavor stage --dart-define-from-file=.env.stage`
 - Prod: `flutter run --flavor prod --dart-define-from-file=.env.prod`
+
+## Engine sidecar setup (developer mode)
+Studio expects the Engine repo to live next to this repo:
+
+```text
+TV7/
+  tv7-flutter-studio/
+  tv7-axum-engine/
+```
+
+Build the Engine from `../tv7-axum-engine` before launching Studio:
+
+```sh
+cargo build
+```
+
+In developer mode Studio resolves the Engine binary at `../tv7-axum-engine/target/debug/engine-service` and launches it automatically on app startup. If that binary is missing, Diagnostics and the startup banner will report the Engine as unavailable.
 
 ### Make targets (from repo root)
 - `make help` — list targets.
