@@ -32,6 +32,8 @@ class MediaService {
   Future<File> prepareIngestFromUrl(
     String url, {
     void Function(String)? onLog,
+    void Function(double progress)? onProgress,
+    void Function(String jobId)? onJobStarted,
   }) async {
     final workspace = await _workspace;
     final filename = 'download_${DateTime.now().millisecondsSinceEpoch}';
@@ -43,7 +45,12 @@ class MediaService {
       outputDir: workspace.path,
       outputTemplate: '$filename.%(ext)s',
     );
-    final completed = await _jobPoller.waitFor(started, onLog: onLog);
+    onJobStarted?.call(started.id);
+    final completed = await _jobPoller.waitFor(
+      started,
+      onLog: onLog,
+      onProgress: onProgress,
+    );
     if (completed.status != 'succeeded') {
       throw StateError(
         completed.error == null || completed.error!.isEmpty
@@ -80,9 +87,11 @@ class MediaService {
         outputPath: transcriptPath,
         language: 'en',
       );
+      onJobStarted?.call(transcriptJob.id);
       final transcriptCompleted = await _jobPoller.waitFor(
         transcriptJob,
         onLog: onLog,
+        onProgress: onProgress,
       );
       if (transcriptCompleted.status == 'succeeded') {
         final transcript = EngineTranscriptDownloadResult.fromJson(

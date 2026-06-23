@@ -38,6 +38,8 @@ class _FakeToolRunner extends ToolRunner {
 
 class _FakeEngineTransport implements EngineJsonTransport {
   final List<Map<String, dynamic>?> requests = [];
+  bool requireTranscriptionSetup = false;
+  String? generatedTranscriptPath;
 
   @override
   Future<EngineHttpResponse> request(
@@ -46,6 +48,22 @@ class _FakeEngineTransport implements EngineJsonTransport {
     Map<String, dynamic>? body,
   }) async {
     requests.add(body);
+    if (uri.path == '/v1/transcripts/generate' && requireTranscriptionSetup) {
+      final json = {
+        'error': 'TRANSCRIPTION_SETUP_REQUIRED',
+        'message':
+            'Local transcription requires a configured runtime and model.',
+        'missing': ['transcription_runtime', 'transcription_model'],
+        'setup_capability': 'transcription',
+      };
+      return EngineHttpResponse(
+        statusCode: 409,
+        elapsed: Duration.zero,
+        json: json,
+        rawBody: json.toString(),
+      );
+    }
+
     final json = switch (uri.path) {
       '/v1/media/probe' => {
         'metadata': {
@@ -59,11 +77,54 @@ class _FakeEngineTransport implements EngineJsonTransport {
       },
       '/v1/media/thumbnail' => {'output_path': body?['output_path']},
       '/v1/media/render-clip' => {'output_path': body?['output_path']},
+      '/v1/transcripts/download' => {
+        'job': {
+          'id': 'transcript_job',
+          'status': 'succeeded',
+          'progress': 1.0,
+          'result': <String, dynamic>{},
+        },
+      },
+      '/v1/transcripts/generate' => {
+        'job': {
+          'id': 'generate_job',
+          'kind': 'transcript_generate',
+          'status': 'queued',
+          'progress': 0.0,
+          'logs': ['queued transcript generation'],
+          'result': null,
+          'error': null,
+          'cancel_requested': false,
+        },
+      },
+      '/v1/jobs/generate_job' => {
+        'id': 'generate_job',
+        'kind': 'transcript_generate',
+        'status': 'succeeded',
+        'progress': 1.0,
+        'logs': ['queued transcript generation', 'completed'],
+        'result': {
+          'transcript_path': generatedTranscriptPath,
+          'language': 'en',
+        },
+        'error': null,
+        'cancel_requested': false,
+      },
+      '/v1/jobs/generate_job/logs' => {
+        'job_id': 'generate_job',
+        'logs': ['queued transcript generation', 'completed'],
+      },
       _ => {'status': 'ok'},
     };
     final outputPath = body?['output_path']?.toString();
     if (uri.path == '/v1/media/thumbnail' && outputPath != null) {
       await File(outputPath).create(recursive: true);
+    }
+    if (uri.path == '/v1/transcripts/generate' && outputPath != null) {
+      generatedTranscriptPath = outputPath;
+      await File(outputPath).writeAsString(
+        'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nGenerated transcript',
+      );
     }
     return EngineHttpResponse(
       statusCode: 200,
@@ -165,5 +226,92 @@ void main() {
     expect(video.existsSync(), isFalse);
     expect(meta.existsSync(), isFalse);
     expect(thumb.existsSync(), isFalse);
+  });
+
+  test(
+    'downloadTranscript accepts source_url metadata from older files',
+    () async {
+      final workspace = Directory(p.join(tempDir.path, 'forgotten_workspace'));
+      await workspace.create(recursive: true);
+      final video = File(p.join(workspace.path, 'video.mp4'))
+        ..writeAsStringSync('data');
+      final meta = File('${video.path}.meta.json')
+        ..writeAsStringSync(
+          '{"source_url":"https://example.com/watch?v=123",'
+          '"subtitles":{"en":[]}}',
+        );
+
+      await repository.downloadTranscript(video.path);
+
+      expect(meta.existsSync(), isTrue);
+      expect(
+        engineTransport.requests,
+        contains(containsPair('url', 'https://example.com/watch?v=123')),
+      );
+    },
+  );
+
+  test('downloadTranscript rejects local-only source metadata', () async {
+    final workspace = Directory(p.join(tempDir.path, 'forgotten_workspace'));
+    await workspace.create(recursive: true);
+    final video = File(p.join(workspace.path, 'video.mp4'))
+      ..writeAsStringSync('data');
+    File('${video.path}.meta.json').writeAsStringSync(
+      '{"source_url":"file:///tmp/video.mp4","subtitles":{"en":[]}}',
+    );
+
+    expect(
+      repository.downloadTranscript(video.path),
+      throwsA(
+        isA<Exception>().having(
+          (error) => error.toString(),
+          'message',
+          contains('requires original remote source URL metadata'),
+        ),
+      ),
+    );
+  });
+
+  test(
+    'generateTranscript creates sidecar transcript through Engine job',
+    () async {
+      final workspace = Directory(p.join(tempDir.path, 'forgotten_workspace'));
+      await workspace.create(recursive: true);
+      final video = File(p.join(workspace.path, 'video.mp4'))
+        ..writeAsStringSync('data');
+
+      final transcript = await repository.generateTranscript(video.path);
+
+      expect(transcript?.text, 'Generated transcript');
+      expect(File(p.join(workspace.path, 'video.vtt')).existsSync(), isTrue);
+      expect(
+        engineTransport.requests,
+        contains(
+          allOf(
+            containsPair('media_path', video.path),
+            containsPair('output_path', p.join(workspace.path, 'video.vtt')),
+          ),
+        ),
+      );
+    },
+  );
+
+  test('generateTranscript surfaces transcription setup-required', () async {
+    final workspace = Directory(p.join(tempDir.path, 'forgotten_workspace'));
+    await workspace.create(recursive: true);
+    final video = File(p.join(workspace.path, 'video.mp4'))
+      ..writeAsStringSync('data');
+    engineTransport.requireTranscriptionSetup = true;
+
+    expect(
+      repository.generateTranscript(video.path),
+      throwsA(
+        isA<LocalTranscriptionSetupRequiredException>().having(
+          (error) => error.missing,
+          'missing',
+          contains('transcription_runtime'),
+        ),
+      ),
+    );
   });
 }

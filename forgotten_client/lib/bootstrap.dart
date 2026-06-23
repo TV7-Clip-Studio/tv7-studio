@@ -61,21 +61,14 @@ String _resolveDeveloperEngineBinaryPath() {
   final current = Directory.current.path;
   final candidates = [
     p.normalize(
-      p.join(
-        current,
-        '..',
-        'tv7-axum-engine',
-        'target',
-        'debug',
-        'engine-service',
-      ),
+      p.join(current, '..', 'tv7-engine', 'target', 'debug', 'engine-service'),
     ),
     p.normalize(
       p.join(
         current,
         '..',
         '..',
-        'tv7-axum-engine',
+        'tv7-engine',
         'target',
         'debug',
         'engine-service',

@@ -204,4 +204,30 @@ void main() {
       );
     },
   );
+
+  test('invokes onProgress with correct progress values', () async {
+    final transport = _FakeEngineTransport([
+      _jobJson('running', logs: ['running']),
+      _jobJson('succeeded', logs: ['done']),
+    ]);
+    final poller = EngineJobPoller(
+      engineClient: EngineClient(
+        baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+        transport: transport,
+      ),
+      policy: const EngineJobPollingPolicy(
+        initialInterval: Duration.zero,
+        maxInterval: Duration.zero,
+      ),
+    );
+    final progressValues = <double>[];
+
+    final completed = await poller.waitFor(
+      _job('queued'),
+      onProgress: progressValues.add,
+    );
+
+    expect(completed.status, 'succeeded');
+    expect(progressValues, containsAllInOrder([0.0, 0.5, 1.0]));
+  });
 }

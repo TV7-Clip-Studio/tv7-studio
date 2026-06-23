@@ -44,6 +44,34 @@ class TranscriptResult {
   final String? languageCode;
 }
 
+class LocalTranscriptionSetupRequiredException implements Exception {
+  const LocalTranscriptionSetupRequiredException({
+    required this.message,
+    required this.missing,
+    required this.setupCapability,
+  });
+
+  factory LocalTranscriptionSetupRequiredException.fromEngine(
+    EngineTranscriptionSetupRequiredException error,
+  ) {
+    return LocalTranscriptionSetupRequiredException(
+      message: error.message,
+      missing: error.missing,
+      setupCapability: error.setupCapability,
+    );
+  }
+
+  final String message;
+  final List<String> missing;
+  final String? setupCapability;
+
+  @override
+  String toString() {
+    final suffix = missing.isEmpty ? '' : ' Missing: ${missing.join(', ')}.';
+    return '$message$suffix';
+  }
+}
+
 class VttCue {
   VttCue({required this.start, required this.end, required this.text});
   final double start;
@@ -138,6 +166,30 @@ List<List<double>> calculateTimelineGaps(
     gaps.add([current, totalDuration]);
   }
   return gaps;
+}
+
+String? _sourceUrlFromMetadata(Map<String, dynamic> metadata) {
+  final candidates = [
+    metadata['webpage_url'],
+    metadata['source_url'],
+    metadata['sourceUrl'],
+    metadata['url'],
+  ];
+  for (final candidate in candidates) {
+    final value = candidate?.toString().trim();
+    if (value != null && value.isNotEmpty) return value;
+  }
+  return null;
+}
+
+String? _remoteSourceUrl(Map<String, dynamic> metadata) {
+  final sourceUrl = _sourceUrlFromMetadata(metadata);
+  if (sourceUrl == null) return null;
+  final uri = Uri.tryParse(sourceUrl);
+  if (uri == null || uri.scheme == 'file' || uri.scheme == 'local') {
+    return null;
+  }
+  return sourceUrl;
 }
 
 List<api.SuggestedClip> segmentCuesIntoHighlights(
@@ -384,10 +436,12 @@ class ClientVideoRepository {
 
     final meta =
         jsonDecode(await metaFile.readAsString()) as Map<String, dynamic>;
-    final url = meta['webpage_url'] as String?;
+    final url = _remoteSourceUrl(meta);
 
     if (url == null) {
-      throw Exception('No source URL found in metadata');
+      throw Exception(
+        'Transcript download requires original remote source URL metadata',
+      );
     }
 
     final lang = _selectSubtitleLanguage(meta);
@@ -405,6 +459,49 @@ class ClientVideoRepository {
     if (completed.status != 'succeeded') {
       throw Exception(completed.error ?? 'Transcript job ${completed.status}');
     }
+  }
+
+  Future<TranscriptResult?> generateTranscript(
+    String videoPath, {
+    String language = 'en',
+    void Function(String)? onLog,
+    void Function(double progress)? onProgress,
+  }) async {
+    final transcriptPath = videoPath.replaceAll(p.extension(videoPath), '.vtt');
+    EngineJob job;
+    try {
+      job = await engineClient.startTranscriptGenerate(
+        mediaPath: videoPath,
+        outputPath: transcriptPath,
+        language: language,
+      );
+    } on EngineTranscriptionSetupRequiredException catch (error) {
+      throw LocalTranscriptionSetupRequiredException.fromEngine(error);
+    }
+
+    final completed = await _jobPoller.waitFor(
+      job,
+      onLog: onLog,
+      onProgress: onProgress,
+    );
+    if (completed.status != 'succeeded') {
+      throw Exception(completed.error ?? 'Transcript job ${completed.status}');
+    }
+
+    final result = completed.result == null
+        ? null
+        : EngineTranscriptDownloadResult.fromJson(completed.result!);
+    final generatedPath = result?.transcriptPath;
+    if (generatedPath != null &&
+        generatedPath.isNotEmpty &&
+        generatedPath != transcriptPath) {
+      final generatedFile = File(generatedPath);
+      if (await generatedFile.exists()) {
+        await generatedFile.copy(transcriptPath);
+      }
+    }
+
+    return getTranscript(videoPath);
   }
 
   Future<TranscriptResult?> getTranscript(String videoPath) async {
@@ -764,7 +861,7 @@ class ClientVideoRepository {
 
     // 1. Try to get metadata from existing meta file
     if (meta != null) {
-      final metaSourceUrl = meta['webpage_url'] as String?;
+      final metaSourceUrl = _sourceUrlFromMetadata(meta);
       if (metaSourceUrl != null) {
         sourceUrl = metaSourceUrl;
       }
@@ -987,7 +1084,7 @@ class ClientVideoRepository {
     int? backendId;
 
     if (meta != null) {
-      sourceUrl = meta['webpage_url'] as String?;
+      sourceUrl = _sourceUrlFromMetadata(meta);
       backendId = meta['backend_id'] as int?;
 
       // Try top-level duration field first (common in yt-dlp metadata)

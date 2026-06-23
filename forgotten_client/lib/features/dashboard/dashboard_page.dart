@@ -15,6 +15,7 @@ import 'package:forgotten_client/data/local/local_video_repository.dart';
 import 'package:forgotten_client/data/local/media_service.dart';
 import 'package:forgotten_client/data/local/studio_diagnostics_service.dart';
 import 'package:forgotten_client/features/dashboard/clip_creation_dialog.dart';
+import 'package:forgotten_client/features/dashboard/quick_clip_preflight.dart';
 import 'package:forgotten_client/features/diagnostics/diagnostics_page.dart';
 import 'package:forgotten_client/features/ingest/ingest_page.dart';
 import 'package:forgotten_client/features/player/video_player_page.dart';
@@ -64,6 +65,7 @@ class _DashboardPageState extends State<DashboardPage> {
   String _autoClipStatus = '';
   int _autoClipCompleted = 0;
   int _autoClipTotal = 0;
+  final Map<String, _QuickClipIssue> _quickClipIssues = {};
 
   @override
   void initState() {
@@ -775,6 +777,11 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         children: [
           const Divider(height: 20),
+          if (_quickClipIssues[sourceVideo.file.path] != null)
+            _buildQuickClipIssueBanner(
+              context,
+              _quickClipIssues[sourceVideo.file.path]!,
+            ),
           // Source video actions row (sleek compact filled tonal and filled buttons)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -834,6 +841,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   const SizedBox(width: 8),
                   FilledButton.tonalIcon(
+                    key: const ValueKey('quick_clip_action'),
                     onPressed: () async {
                       await _showQuickClipSettingsSheet(
                         context,
@@ -1428,22 +1436,108 @@ class _DashboardPageState extends State<DashboardPage> {
     );
     if (transcript != null) return transcript;
 
-    try {
-      await widget.localVideoRepository.downloadTranscript(
-        sourceVideo.file.path,
-      );
-      transcript = await widget.localVideoRepository.getTranscript(
-        sourceVideo.file.path,
-      );
-    } catch (e) {
-      widget.diagnosticsLog.record('Transcript download', e);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Transcript download failed: $e')),
+    final remoteSource = await remoteSourceUrlFor(
+      videoPath: sourceVideo.file.path,
+      sourceUrl: sourceVideo.sourceUrl,
+    );
+    if (remoteSource != null) {
+      try {
+        setState(() {
+          _autoClipStatus = 'Downloading transcript...';
+        });
+        await widget.localVideoRepository.downloadTranscript(
+          sourceVideo.file.path,
         );
+        transcript = await widget.localVideoRepository.getTranscript(
+          sourceVideo.file.path,
+        );
+        if (transcript != null) return transcript;
+      } catch (e) {
+        widget.diagnosticsLog.record('Transcript download', e);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Transcript download failed: $e')),
+          );
+        }
       }
     }
-    return transcript;
+
+    try {
+      setState(() {
+        _autoClipStatus = 'Generating transcript with Engine...';
+      });
+      transcript = await widget.localVideoRepository.generateTranscript(
+        sourceVideo.file.path,
+        onLog: (line) {
+          widget.diagnosticsLog.record('Transcript generation', line);
+        },
+        onProgress: (progress) {
+          if (!mounted) return;
+          setState(() {
+            final percent = (progress.clamp(0, 1) * 100).round();
+            _autoClipStatus = 'Generating transcript with Engine... $percent%';
+          });
+        },
+      );
+      if (transcript != null) {
+        await _loadVideos();
+      }
+      return transcript;
+    } on LocalTranscriptionSetupRequiredException catch (e) {
+      widget.diagnosticsLog.record('Transcript generation setup', e);
+      _recordQuickClipIssue(
+        sourceVideo,
+        stage: 'Transcript setup',
+        message: 'Local transcription setup is required.',
+        detail:
+            '${e.message} Missing: ${e.missing.join(', ')}. '
+            'Engine transcript generation is supported after setup.',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Local transcription setup required: $e')),
+        );
+      }
+      return null;
+    } catch (e) {
+      widget.diagnosticsLog.record('Transcript generation', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Transcript generation failed: $e')),
+        );
+      }
+      return null;
+    }
+  }
+
+  void _recordQuickClipIssue(
+    VideoItem sourceVideo, {
+    required String stage,
+    required String message,
+    String? detail,
+  }) {
+    final issue = _QuickClipIssue(
+      stage: stage,
+      message: message,
+      detail: detail,
+      timestamp: DateTime.now(),
+    );
+    widget.diagnosticsLog.record(
+      'Quick Clip: $stage',
+      detail == null || detail.isEmpty ? message : '$message\n$detail',
+    );
+    if (!mounted) return;
+    setState(() {
+      _quickClipIssues[sourceVideo.file.path] = issue;
+    });
+  }
+
+  void _clearQuickClipIssue(VideoItem sourceVideo) {
+    if (!mounted) return;
+    if (!_quickClipIssues.containsKey(sourceVideo.file.path)) return;
+    setState(() {
+      _quickClipIssues.remove(sourceVideo.file.path);
+    });
   }
 
   int _durationSeconds(String? durationLabel) {
@@ -1489,6 +1583,38 @@ class _DashboardPageState extends State<DashboardPage> {
     final totalGapSecs = gaps
         .fold<double>(0.0, (prev, element) => prev + (element[1] - element[0]))
         .toInt();
+    QuickClipPreflight preflight;
+    try {
+      SetupStatus? setupStatus;
+      try {
+        setupStatus = await widget.engineClient.getSetupStatus();
+      } catch (e) {
+        widget.diagnosticsLog.record('Quick Clip setup readiness', e);
+      }
+      preflight = await quickClipPreflight(
+        videoPath: sourceVideo.file.path,
+        sourceUrl: sourceVideo.sourceUrl,
+        getTranscript: widget.localVideoRepository.getTranscript,
+        setupStatus: setupStatus,
+      );
+    } catch (e) {
+      widget.diagnosticsLog.record('Quick Clip metadata preflight', e);
+      preflight = const QuickClipPreflight(
+        status: QuickClipPreflightStatus.blocked,
+        message: 'Quick Clip could not inspect transcript metadata.',
+        remediation: 'Open Diagnostics for details and try refreshing videos.',
+      );
+    }
+    if (preflight.isBlocked) {
+      _recordQuickClipIssue(
+        sourceVideo,
+        stage: 'Transcript preflight',
+        message: preflight.message,
+        detail: preflight.remediation,
+      );
+    } else {
+      _clearQuickClipIssue(sourceVideo);
+    }
 
     String durationPreset = 'medium';
     bool gapsOnly = true;
@@ -1559,6 +1685,8 @@ class _DashboardPageState extends State<DashboardPage> {
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    _buildQuickClipPreflightCard(context, preflight),
                     const SizedBox(height: 24),
                     Text(
                       'CLIP DURATION',
@@ -1678,15 +1806,17 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                     const SizedBox(height: 32),
                     FilledButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _autoCreateClipsFromHighlights(
-                          groupKey,
-                          sourceVideo,
-                          durationPreset: durationPreset,
-                          gapsOnly: gapsOnly,
-                        );
-                      },
+                      onPressed: preflight.isBlocked
+                          ? null
+                          : () {
+                              Navigator.pop(context);
+                              _autoCreateClipsFromHighlights(
+                                groupKey,
+                                sourceVideo,
+                                durationPreset: durationPreset,
+                                gapsOnly: gapsOnly,
+                              );
+                            },
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -1699,7 +1829,9 @@ class _DashboardPageState extends State<DashboardPage> {
                           const Icon(Icons.flash_on, size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            existingClips.isEmpty
+                            preflight.isBlocked
+                                ? 'TRANSCRIPT REQUIRED'
+                                : existingClips.isEmpty
                                 ? 'GENERATE CLIPS'
                                 : gapsOnly
                                 ? 'GENERATE CLIPS IN GAPS'
@@ -1719,6 +1851,145 @@ class _DashboardPageState extends State<DashboardPage> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildQuickClipPreflightCard(
+    BuildContext context,
+    QuickClipPreflight preflight,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isBlocked = preflight.isBlocked;
+    final accentColor = isBlocked ? colorScheme.error : colorScheme.primary;
+    final backgroundColor = isBlocked
+        ? colorScheme.errorContainer.withValues(alpha: 0.24)
+        : colorScheme.primaryContainer.withValues(alpha: 0.18);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accentColor.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isBlocked ? Icons.report_problem_outlined : Icons.check_circle,
+            color: accentColor,
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isBlocked ? 'Transcript required' : 'Ready for Quick Clip',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: accentColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  preflight.message,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (preflight.remediation != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    preflight.remediation!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+                if (preflight.actionLabel != null) ...[
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _selectedIndex = 2;
+                      });
+                      Navigator.maybePop(context);
+                    },
+                    icon: const Icon(Icons.settings_suggest_outlined, size: 16),
+                    label: Text(preflight.actionLabel!),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickClipIssueBanner(
+    BuildContext context,
+    _QuickClipIssue issue,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colorScheme.error.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.report_problem_outlined, color: colorScheme.error),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Quick Clip blocked: ${issue.stage}',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: colorScheme.error,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(issue.message),
+                const SizedBox(height: 4),
+                Text(
+                  'Recorded ${TimeOfDay.fromDateTime(issue.timestamp).format(context)}',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (issue.detail != null && issue.detail!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    issue.detail!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () {
+              setState(() {
+                _selectedIndex = 2;
+              });
+            },
+            icon: const Icon(Icons.monitor_heart_outlined, size: 16),
+            label: const Text('Diagnostics'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1757,10 +2028,19 @@ class _DashboardPageState extends State<DashboardPage> {
       _autoClipCompleted = 0;
       _autoClipTotal = 0;
     });
+    _clearQuickClipIssue(sourceVideo);
 
     try {
       final transcript = await _ensureTranscript(sourceVideo);
       if (transcript == null) {
+        _recordQuickClipIssue(
+          sourceVideo,
+          stage: 'Transcript',
+          message: 'No transcript is available for Quick Clip.',
+          detail:
+              'The workflow needs an existing .vtt transcript, remote caption '
+              'metadata, or completed Engine local transcription setup.',
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -1783,6 +2063,13 @@ class _DashboardPageState extends State<DashboardPage> {
         }
       }
       if (effectiveDuration <= 1) {
+        _recordQuickClipIssue(
+          sourceVideo,
+          stage: 'Duration probe',
+          message: 'Unable to determine video duration for highlights.',
+          detail:
+              'Studio could not read duration from metadata or Engine probe.',
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -1810,7 +2097,12 @@ class _DashboardPageState extends State<DashboardPage> {
           gapsOnly: gapsOnly,
         );
       } catch (e) {
-        widget.diagnosticsLog.record('Highlight detection', e);
+        _recordQuickClipIssue(
+          sourceVideo,
+          stage: 'Highlight detection',
+          message: 'Highlights failed before clips could be rendered.',
+          detail: e.toString(),
+        );
         if (mounted) {
           ScaffoldMessenger.of(
             context,
@@ -1821,6 +2113,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
       final clips = highlightResult.clips;
       if (clips.isEmpty) {
+        _recordQuickClipIssue(
+          sourceVideo,
+          stage: 'Highlight detection',
+          message: 'Highlights completed but returned no clip candidates.',
+          detail: 'Try the entire-video target or a different duration preset.',
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -1865,6 +2163,18 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         );
         await _loadVideos();
+      }
+    } catch (e) {
+      _recordQuickClipIssue(
+        sourceVideo,
+        stage: 'Workflow',
+        message: 'Quick Clip stopped before completion.',
+        detail: e.toString(),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Quick Clip failed: $e')));
       }
     } finally {
       if (mounted) {
@@ -1976,4 +2286,18 @@ class _ClipPayload {
   final String hook;
   final File videoFile;
   final File thumbFile;
+}
+
+class _QuickClipIssue {
+  const _QuickClipIssue({
+    required this.stage,
+    required this.message,
+    required this.timestamp,
+    this.detail,
+  });
+
+  final String stage;
+  final String message;
+  final DateTime timestamp;
+  final String? detail;
 }

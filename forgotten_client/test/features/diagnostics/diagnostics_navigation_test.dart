@@ -98,6 +98,24 @@ class _FakeDiagnosticsService extends StudioDiagnosticsService {
           status: DiagnosticCheckStatus.ready,
           detail: 'status=ok',
         ),
+        DiagnosticCheck(
+          name: 'Engine setup: ai',
+          status: DiagnosticCheckStatus.ready,
+          detail:
+              'status=ready | provider=tv7_cloud | Ready through TV7 cloud AI; offline creation still requires local AI.',
+        ),
+        DiagnosticCheck(
+          name: 'Engine setup: offline_creation',
+          status: DiagnosticCheckStatus.degraded,
+          detail:
+              'status=not_ready | missing=transcription, local_ai | Action: Import or configure missing offline creation assets.',
+        ),
+        DiagnosticCheck(
+          name: 'Engine AI provider: tv7_cloud',
+          status: DiagnosticCheckStatus.ready,
+          detail:
+              'status=ready | source=tv7_cloud | active=true | requires_internet=true | cost_policy=tv7_managed_usage',
+        ),
       ],
       endpointResults: const [
         EngineEndpointResult(
@@ -210,6 +228,33 @@ void main() {
 
     expect(find.text('Local Media Engine'), findsOneWidget);
     expect(find.text('Health API'), findsOneWidget);
+  });
+
+  testWidgets('diagnostics page renders unified AI readiness', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(),
+        home: DiagnosticsPage(
+          service: _FakeDiagnosticsService(),
+          diagnosticsLog: DiagnosticsLog(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Setup Readiness'), findsOneWidget);
+    expect(find.text('AI'), findsOneWidget);
+    expect(find.text('OFFLINE CREATION'), findsOneWidget);
+    await tester.drag(
+      find.byType(Scrollable).first,
+      const Offset(0, -500),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+    expect(find.text('tv7 cloud'), findsOneWidget);
+    expect(find.textContaining('requires_internet=true'), findsOneWidget);
+    expect(find.textContaining('local_llm'), findsNothing);
+    expect(find.textContaining('cloud_llm'), findsNothing);
   });
 
   testWidgets('diagnostics page renders collection errors', (tester) async {

@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import 'package:forgotten_client/config/app_config.dart';
+import 'package:forgotten_client/data/api/safe_log_interceptor.dart';
 import 'package:forgotten_client/data/auth/token_store.dart';
 
 class ApiClient {
@@ -15,13 +15,7 @@ class ApiClient {
               ),
             )
             ..interceptors.add(_AuthInterceptor(tokenStore: tokenStore))
-            ..interceptors.add(
-              LogInterceptor(
-                requestBody: true,
-                responseBody: true,
-                logPrint: (msg) => debugPrint('[api] $msg'),
-              ),
-            );
+            ..interceptors.add(SafeLogInterceptor(prefix: 'api'));
 
   final AppConfig config;
   final TokenStore tokenStore;

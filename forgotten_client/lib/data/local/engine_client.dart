@@ -20,6 +20,18 @@ class EngineClient {
     return EngineDiagnostics.fromJson(response.json);
   }
 
+  Future<SetupManifest> getSetupManifest() async {
+    final response = await request('GET', '/v1/setup/manifest');
+    _ensureSuccess(response);
+    return SetupManifest.fromJson(response.json);
+  }
+
+  Future<SetupStatus> getSetupStatus() async {
+    final response = await request('GET', '/v1/setup/status');
+    _ensureSuccess(response);
+    return SetupStatus.fromJson(response.json);
+  }
+
   Future<EngineMediaMetadata> probeMedia(String path) async {
     final response = await request(
       'POST',
@@ -103,6 +115,29 @@ class EngineClient {
     return EngineJob.fromJson(_jobJson(response.json));
   }
 
+  Future<EngineJob> startTranscriptGenerate({
+    required String mediaPath,
+    required String outputPath,
+    String? language,
+  }) async {
+    final response = await request(
+      'POST',
+      '/v1/transcripts/generate',
+      body: {
+        'media_path': mediaPath,
+        'output_path': outputPath,
+        if (language != null) 'language': language,
+      },
+    );
+    if (!response.isSuccess &&
+        response.statusCode == 409 &&
+        response.json['error'] == 'TRANSCRIPTION_SETUP_REQUIRED') {
+      throw EngineTranscriptionSetupRequiredException.fromJson(response.json);
+    }
+    _ensureSuccess(response);
+    return EngineJob.fromJson(_jobJson(response.json));
+  }
+
   Future<EngineJob> getJob(String id) async {
     final response = await request('GET', '/v1/jobs/$id');
     _ensureSuccess(response);
@@ -165,6 +200,39 @@ class EngineApiException implements Exception {
       return 'EngineApiException($statusCode): $error';
     }
     return 'EngineApiException($statusCode)';
+  }
+}
+
+class EngineTranscriptionSetupRequiredException implements Exception {
+  const EngineTranscriptionSetupRequiredException({
+    required this.message,
+    required this.missing,
+    required this.setupCapability,
+  });
+
+  factory EngineTranscriptionSetupRequiredException.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return EngineTranscriptionSetupRequiredException(
+      message:
+          json['message']?.toString() ?? 'Local transcription requires setup.',
+      missing:
+          (json['missing'] as List?)
+              ?.map((value) => value.toString())
+              .toList() ??
+          const [],
+      setupCapability: json['setup_capability']?.toString(),
+    );
+  }
+
+  final String message;
+  final List<String> missing;
+  final String? setupCapability;
+
+  @override
+  String toString() {
+    final suffix = missing.isEmpty ? '' : ' Missing: ${missing.join(', ')}.';
+    return '$message$suffix';
   }
 }
 
@@ -289,6 +357,288 @@ class EngineDiagnostics {
 
     return 'Engine degraded: diagnostics status is $status';
   }
+}
+
+class SetupManifest {
+  const SetupManifest({
+    required this.schemaVersion,
+    required this.platform,
+    required this.setupModes,
+    required this.aiProviderOrder,
+    required this.providerModes,
+    required this.resolutionOrder,
+    required this.assets,
+    required this.raw,
+  });
+
+  factory SetupManifest.fromJson(Map<String, dynamic> json) {
+    return SetupManifest(
+      schemaVersion: _toInt(json['schema_version']) ?? 0,
+      platform: json['platform']?.toString() ?? 'unknown',
+      setupModes: _stringList(json['setup_modes']),
+      aiProviderOrder: _stringList(json['ai_provider_order']),
+      providerModes: _stringList(json['provider_modes']),
+      resolutionOrder: _stringList(json['resolution_order']),
+      assets: _mapList(
+        json['assets'],
+      ).map(SetupManifestAsset.fromJson).toList(),
+      raw: json,
+    );
+  }
+
+  final int schemaVersion;
+  final String platform;
+  final List<String> setupModes;
+  final List<String> aiProviderOrder;
+  final List<String> providerModes;
+  final List<String> resolutionOrder;
+  final List<SetupManifestAsset> assets;
+  final Map<String, dynamic> raw;
+
+  List<String> get effectiveSetupModes =>
+      setupModes.isNotEmpty ? setupModes : providerModes;
+
+  List<String> get effectiveAiProviderOrder =>
+      aiProviderOrder.isNotEmpty ? aiProviderOrder : resolutionOrder;
+}
+
+class SetupManifestAsset {
+  const SetupManifestAsset({
+    required this.id,
+    required this.kind,
+    required this.name,
+    required this.requiredFor,
+    required this.installable,
+    required this.bundled,
+    required this.source,
+    required this.version,
+    required this.download,
+    required this.raw,
+  });
+
+  factory SetupManifestAsset.fromJson(Map<String, dynamic> json) {
+    final download = json['download'];
+    return SetupManifestAsset(
+      id: json['id']?.toString() ?? '',
+      kind: json['kind']?.toString() ?? 'unknown',
+      name: json['name']?.toString() ?? 'Unnamed asset',
+      requiredFor: _stringList(json['required_for']),
+      installable: json['installable'] == true,
+      bundled: json['bundled'] == true,
+      source: json['source']?.toString() ?? 'unknown',
+      version: json['version']?.toString(),
+      download: download is Map<String, dynamic>
+          ? SetupDownload.fromJson(download)
+          : null,
+      raw: json,
+    );
+  }
+
+  final String id;
+  final String kind;
+  final String name;
+  final List<String> requiredFor;
+  final bool installable;
+  final bool bundled;
+  final String source;
+  final String? version;
+  final SetupDownload? download;
+  final Map<String, dynamic> raw;
+}
+
+class SetupDownload {
+  const SetupDownload({
+    required this.url,
+    required this.sha256,
+    required this.sizeBytes,
+  });
+
+  factory SetupDownload.fromJson(Map<String, dynamic> json) {
+    return SetupDownload(
+      url: json['url']?.toString() ?? '',
+      sha256: json['sha256']?.toString() ?? '',
+      sizeBytes: _toInt(json['size_bytes']) ?? 0,
+    );
+  }
+
+  final String url;
+  final String sha256;
+  final int sizeBytes;
+}
+
+class SetupStatus {
+  const SetupStatus({
+    required this.schemaVersion,
+    required this.setupComplete,
+    required this.activeAiProvider,
+    required this.selectedProvider,
+    required this.assets,
+    required this.aiProviders,
+    required this.capabilities,
+    required this.raw,
+  });
+
+  factory SetupStatus.fromJson(Map<String, dynamic> json) {
+    return SetupStatus(
+      schemaVersion: _toInt(json['schema_version']) ?? 0,
+      setupComplete: json['setup_complete'] == true,
+      activeAiProvider: json['active_ai_provider']?.toString(),
+      selectedProvider: json['selected_provider']?.toString(),
+      assets: _mapList(json['assets']).map(SetupAssetStatus.fromJson).toList(),
+      aiProviders: _mapList(
+        json['ai_providers'] ?? json['providers'],
+      ).map(SetupProviderStatus.fromJson).toList(),
+      capabilities: _mapList(
+        json['capabilities'],
+      ).map(SetupCapabilityStatus.fromJson).toList(),
+      raw: json,
+    );
+  }
+
+  final int schemaVersion;
+  final bool setupComplete;
+  final String? activeAiProvider;
+  final String? selectedProvider;
+  final List<SetupAssetStatus> assets;
+  final List<SetupProviderStatus> aiProviders;
+  final List<SetupCapabilityStatus> capabilities;
+  final Map<String, dynamic> raw;
+
+  String? get effectiveActiveAiProvider => activeAiProvider ?? selectedProvider;
+
+  SetupCapabilityStatus? capability(String name) {
+    for (final capability in capabilities) {
+      if (capability.name == name) return capability;
+    }
+    return null;
+  }
+
+  List<SetupAssetStatus> missingAssetsFor(SetupCapabilityStatus capability) {
+    final missing = capability.missing.toSet();
+    return assets
+        .where(
+          (asset) =>
+              missing.contains(asset.id) ||
+              missing.contains(asset.kind) ||
+              missing.contains(asset.name),
+        )
+        .toList();
+  }
+}
+
+class SetupAssetStatus {
+  const SetupAssetStatus({
+    required this.id,
+    required this.kind,
+    required this.name,
+    required this.status,
+    required this.source,
+    required this.path,
+    required this.version,
+    required this.error,
+    required this.raw,
+  });
+
+  factory SetupAssetStatus.fromJson(Map<String, dynamic> json) {
+    return SetupAssetStatus(
+      id: json['id']?.toString() ?? '',
+      kind: json['kind']?.toString() ?? 'unknown',
+      name: json['name']?.toString() ?? 'Unnamed asset',
+      status: json['status']?.toString() ?? 'unknown',
+      source: json['source']?.toString() ?? 'unknown',
+      path: json['path']?.toString(),
+      version: json['version']?.toString(),
+      error: json['error']?.toString(),
+      raw: json,
+    );
+  }
+
+  final String id;
+  final String kind;
+  final String name;
+  final String status;
+  final String source;
+  final String? path;
+  final String? version;
+  final String? error;
+  final Map<String, dynamic> raw;
+
+  bool get isAvailable => status == 'available';
+  bool get isInstallable => status == 'installable';
+  bool get isUserInstalled => source == 'user_path' || source == 'ollama';
+}
+
+class SetupProviderStatus {
+  const SetupProviderStatus({
+    required this.mode,
+    required this.status,
+    required this.source,
+    required this.requiredAssets,
+    required this.requiresInternet,
+    required this.requiresUserConfirmation,
+    required this.costPolicy,
+    required this.action,
+    required this.raw,
+  });
+
+  factory SetupProviderStatus.fromJson(Map<String, dynamic> json) {
+    return SetupProviderStatus(
+      mode: json['mode']?.toString() ?? json['source']?.toString() ?? 'unknown',
+      status: json['status']?.toString() ?? 'unknown',
+      source: json['source']?.toString() ?? 'unknown',
+      requiredAssets: _stringList(json['required_assets']),
+      requiresInternet: json['requires_internet'] == true,
+      requiresUserConfirmation: json['requires_user_confirmation'] == true,
+      costPolicy: json['cost_policy']?.toString(),
+      action: json['action']?.toString(),
+      raw: json,
+    );
+  }
+
+  final String mode;
+  final String status;
+  final String source;
+  final List<String> requiredAssets;
+  final bool requiresInternet;
+  final bool requiresUserConfirmation;
+  final String? costPolicy;
+  final String? action;
+  final Map<String, dynamic> raw;
+}
+
+class SetupCapabilityStatus {
+  const SetupCapabilityStatus({
+    required this.name,
+    required this.status,
+    required this.provider,
+    required this.missing,
+    required this.installable,
+    required this.userActionRequired,
+    required this.raw,
+  });
+
+  factory SetupCapabilityStatus.fromJson(Map<String, dynamic> json) {
+    return SetupCapabilityStatus(
+      name: json['name']?.toString() ?? 'unknown',
+      status: json['status']?.toString() ?? 'unknown',
+      provider: json['provider']?.toString(),
+      missing: _stringList(json['missing']),
+      installable: json['installable'] == true,
+      userActionRequired: json['user_action_required'] == true,
+      raw: json,
+    );
+  }
+
+  final String name;
+  final String status;
+  final String? provider;
+  final List<String> missing;
+  final bool installable;
+  final bool userActionRequired;
+  final Map<String, dynamic> raw;
+
+  bool get isReady => status == 'ready';
+  bool get isNotReady => status == 'not_ready';
 }
 
 class EngineMediaMetadata {
@@ -471,4 +821,14 @@ int? _toInt(Object? value) {
   if (value is num) return value.toInt();
   if (value is String) return int.tryParse(value);
   return null;
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) return const [];
+  return value.map((item) => item.toString()).toList();
+}
+
+List<Map<String, dynamic>> _mapList(Object? value) {
+  if (value is! List) return const [];
+  return value.whereType<Map<String, dynamic>>().toList();
 }

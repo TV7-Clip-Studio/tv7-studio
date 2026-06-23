@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:forgotten_client/config/app_config.dart';
 import 'package:forgotten_client/config/app_theme.dart';
 import 'package:forgotten_client/data/api/api_client.dart';
+import 'package:forgotten_client/data/api/safe_log_interceptor.dart';
 import 'package:forgotten_client/data/auth/auth_repository.dart';
 import 'package:forgotten_client/data/auth/models.dart';
 import 'package:forgotten_client/data/auth/token_store.dart';
@@ -180,13 +181,7 @@ class _ShellState extends State<_Shell> with WidgetsBindingObserver {
         },
       ),
     );
-    _dio.interceptors.add(
-      LogInterceptor(
-        requestBody: true,
-        responseBody: true,
-        logPrint: (msg) => debugPrint('[videos_api] $msg'),
-      ),
-    );
+    _dio.interceptors.add(SafeLogInterceptor(prefix: 'videos_api'));
     _videosApi = VideosApi(_dio);
     _uploadsApi = UploadsApi(_dio);
     _usersApi = UsersApi(_dio);

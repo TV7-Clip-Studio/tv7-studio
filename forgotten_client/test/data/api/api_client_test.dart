@@ -3,8 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:forgotten_client/config/app_config.dart';
 import 'package:forgotten_client/data/api/api_client.dart';
+import 'package:forgotten_client/data/api/safe_log_interceptor.dart';
 import 'package:forgotten_client/data/auth/models.dart';
 import 'package:forgotten_client/data/auth/token_store.dart';
+import 'package:forgotten_client_api/forgotten_client_api.dart';
 
 class _CapturingAdapter implements HttpClientAdapter {
   RequestOptions? lastOptions;
@@ -76,5 +78,53 @@ void main() {
 
     expect(adapter.lastOptions, isNotNull);
     expect(adapter.lastOptions!.headers['Authorization'], 'Bearer abc123');
+  });
+
+  test('sanitizeForLog redacts auth headers and token payloads', () {
+    final sanitized =
+        sanitizeForLog({
+              'Authorization': 'Bearer access-token',
+              'password': 'secret-password',
+              'nested': {
+                'access_token': 'access',
+                'refresh_token': 'refresh',
+                'email': 'user@example.com',
+              },
+            })
+            as Map<dynamic, dynamic>;
+
+    expect(sanitized['Authorization'], '<redacted>');
+    expect(sanitized['password'], '<redacted>');
+    expect(
+      (sanitized['nested'] as Map<dynamic, dynamic>)['access_token'],
+      '<redacted>',
+    );
+    expect(
+      (sanitized['nested'] as Map<dynamic, dynamic>)['refresh_token'],
+      '<redacted>',
+    );
+    expect(
+      (sanitized['nested'] as Map<dynamic, dynamic>)['email'],
+      'user@example.com',
+    );
+  });
+
+  test('sanitizeForLog redacts generated auth DTOs before stringification', () {
+    final sanitized =
+        sanitizeForLog(
+              LoginRequest(email: 'user@example.com', password: 'password123'),
+            )
+            as Map<dynamic, dynamic>;
+
+    expect(sanitized['email'], 'user@example.com');
+    expect(sanitized['password'], '<redacted>');
+  });
+
+  test('sanitizeForLog redacts JSON encoded request bodies', () {
+    final sanitized = sanitizeForLog(
+      '{"email":"user@example.com","password":"password123"}',
+    );
+
+    expect(sanitized, '{"email":"user@example.com","password":"<redacted>"}');
   });
 }
