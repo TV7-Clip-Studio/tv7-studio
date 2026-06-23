@@ -114,7 +114,9 @@ bool _isSensitiveKey(String key) {
 }
 
 String _sanitizeString(String value) {
-  if (value.startsWith('Bearer ')) return 'Bearer $_redacted';
+  if (RegExp(r'^\s*Bearer\s+', caseSensitive: false).hasMatch(value)) {
+    return 'Bearer $_redacted';
+  }
   final trimmed = value.trim();
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {

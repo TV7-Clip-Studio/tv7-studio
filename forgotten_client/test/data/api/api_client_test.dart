@@ -84,6 +84,7 @@ void main() {
     final sanitized =
         sanitizeForLog({
               'Authorization': 'Bearer access-token',
+              'alternate_authorization': 'Bearer\talternate-token',
               'password': 'secret-password',
               'nested': {
                 'access_token': 'access',
@@ -94,6 +95,7 @@ void main() {
             as Map<dynamic, dynamic>;
 
     expect(sanitized['Authorization'], '<redacted>');
+    expect(sanitized['alternate_authorization'], 'Bearer <redacted>');
     expect(sanitized['password'], '<redacted>');
     expect(
       (sanitized['nested'] as Map<dynamic, dynamic>)['access_token'],
