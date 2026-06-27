@@ -160,6 +160,40 @@ class StudioDiagnosticsService {
       }
     }
 
+    try {
+      final setupManifest = await engineClient.getSetupManifest();
+      checks.add(
+        DiagnosticCheck(
+          name: 'Engine /v1/setup/manifest',
+          status: DiagnosticCheckStatus.ready,
+          detail: _setupManifestDetail(setupManifest),
+        ),
+      );
+    } catch (error) {
+      checks.add(
+        DiagnosticCheck(
+          name: 'Engine /v1/setup/manifest',
+          status: DiagnosticCheckStatus.degraded,
+          detail:
+              'Setup manifest unavailable on this Engine build or request failed: $error',
+        ),
+      );
+    }
+
+    try {
+      final setupStatus = await engineClient.getSetupStatus();
+      checks.addAll(_setupChecks(setupStatus));
+    } catch (error) {
+      checks.add(
+        DiagnosticCheck(
+          name: 'Engine /v1/setup/status',
+          status: DiagnosticCheckStatus.degraded,
+          detail:
+              'Setup readiness unavailable on this Engine build or request failed: $error',
+        ),
+      );
+    }
+
     checks.add(await _backendUsersEndpointCheck());
     checks.add(await _backendLicenseCheck());
     checks.add(await _workspaceCheck());
@@ -194,6 +228,16 @@ class StudioDiagnosticsService {
         name: 'Diagnostics',
         method: 'GET',
         path: '/v1/diagnostics',
+      ),
+      _EndpointSmokeDefinition(
+        name: 'Setup manifest',
+        method: 'GET',
+        path: '/v1/setup/manifest',
+      ),
+      _EndpointSmokeDefinition(
+        name: 'Setup status',
+        method: 'GET',
+        path: '/v1/setup/status',
       ),
       _EndpointSmokeDefinition(
         name: 'Probe',
@@ -305,6 +349,177 @@ class StudioDiagnosticsService {
     }
   }
 
+  List<DiagnosticCheck> _setupChecks(SetupStatus setupStatus) {
+    final checks = <DiagnosticCheck>[
+      DiagnosticCheck(
+        name: 'Engine /v1/setup/status',
+        status: setupStatus.setupComplete
+            ? DiagnosticCheckStatus.ready
+            : DiagnosticCheckStatus.degraded,
+        detail: setupStatus.setupComplete
+            ? 'Offline creation setup complete.'
+            : 'Offline creation setup incomplete; capability readiness below.',
+      ),
+    ];
+
+    for (final name in const ['transcription', 'ai', 'offline_creation']) {
+      final capability = setupStatus.capability(name);
+      if (capability == null) {
+        checks.add(
+          DiagnosticCheck(
+            name: 'Engine setup: $name',
+            status: DiagnosticCheckStatus.unknown,
+            detail: 'Capability not reported by Engine setup status.',
+          ),
+        );
+        continue;
+      }
+      checks.add(_setupCapabilityCheck(setupStatus, capability));
+    }
+
+    for (final provider in setupStatus.aiProviders) {
+      checks.add(
+        DiagnosticCheck(
+          name: 'Engine AI provider: ${provider.source}',
+          status: _setupProviderStatus(provider.status),
+          detail: _setupProviderDetail(provider, setupStatus),
+        ),
+      );
+    }
+
+    for (final asset in setupStatus.assets) {
+      checks.add(
+        DiagnosticCheck(
+          name: 'Engine setup asset: ${asset.name}',
+          status: _setupItemStatus(asset.status),
+          detail: _setupAssetDetail(asset),
+        ),
+      );
+    }
+
+    return checks;
+  }
+
+  String _setupManifestDetail(SetupManifest manifest) {
+    final details = <String>[
+      'platform=${manifest.platform}',
+      if (manifest.effectiveSetupModes.isNotEmpty)
+        'setup_modes=${manifest.effectiveSetupModes.join(', ')}',
+      if (manifest.effectiveAiProviderOrder.isNotEmpty)
+        'ai_provider_order=${manifest.effectiveAiProviderOrder.join(', ')}',
+      'assets=${manifest.assets.length}',
+    ];
+    return details.join(' | ');
+  }
+
+  DiagnosticCheck _setupCapabilityCheck(
+    SetupStatus setupStatus,
+    SetupCapabilityStatus capability,
+  ) {
+    final missingAssets = setupStatus.missingAssetsFor(capability);
+    final installableAssets = missingAssets
+        .where((asset) => asset.isInstallable)
+        .toList();
+    final details = <String>[
+      'status=${capability.status}',
+      if (capability.provider != null) 'provider=${capability.provider}',
+      if (capability.missing.isNotEmpty)
+        'missing=${capability.missing.join(', ')}',
+    ];
+    if (capability.isReady) {
+      if (capability.name == 'ai' && capability.provider == 'tv7_cloud') {
+        details.add(
+          'Ready through TV7 cloud AI; offline creation still requires local AI.',
+        );
+      } else {
+        details.add('Ready from configured assets; no reinstall needed.');
+      }
+    } else if (installableAssets.isNotEmpty) {
+      details.add(
+        'Action: Set up ${_capabilityLabel(capability.name)} with explicit user confirmation before any download.',
+      );
+    } else if (capability.installable) {
+      details.add(
+        'Action: Import or configure missing ${_capabilityLabel(capability.name)} assets.',
+      );
+    } else if (capability.userActionRequired) {
+      details.add('Action: user configuration required.');
+    }
+
+    return DiagnosticCheck(
+      name: 'Engine setup: ${capability.name}',
+      status: capability.isReady
+          ? DiagnosticCheckStatus.ready
+          : DiagnosticCheckStatus.degraded,
+      detail: details.join(' | '),
+    );
+  }
+
+  String _setupProviderDetail(
+    SetupProviderStatus provider,
+    SetupStatus setupStatus,
+  ) {
+    final activeProvider = setupStatus.effectiveActiveAiProvider;
+    return [
+      'status=${provider.status}',
+      'source=${provider.source}',
+      if (activeProvider == provider.source) 'active=true',
+      if (provider.requiresInternet) 'requires_internet=true',
+      if (provider.requiresUserConfirmation) 'requires_user_confirmation=true',
+      if (provider.costPolicy != null) 'cost_policy=${provider.costPolicy}',
+      if (provider.requiredAssets.isNotEmpty)
+        'required_assets=${provider.requiredAssets.join(', ')}',
+      if (provider.action != null && provider.action!.isNotEmpty)
+        'action=${provider.action}',
+    ].join(' | ');
+  }
+
+  String _setupAssetDetail(SetupAssetStatus asset) {
+    final details = <String>[
+      'status=${asset.status}',
+      'source=${asset.source}',
+      'kind=${asset.kind}',
+      if (asset.path != null && asset.path!.isNotEmpty) 'path=${asset.path}',
+      if (asset.version != null && asset.version!.isNotEmpty)
+        'version=${asset.version}',
+      if (asset.error != null && asset.error!.isNotEmpty)
+        'error=${asset.error}',
+    ];
+    if (asset.isAvailable && asset.isUserInstalled) {
+      details.add('User-installed asset ready; no reinstall needed.');
+    } else if (asset.isInstallable) {
+      details.add(
+        'Action: available for setup/import/download only after explicit user confirmation.',
+      );
+    }
+    return details.join(' | ');
+  }
+
+  String _capabilityLabel(String name) {
+    return name.replaceAll('_', ' ');
+  }
+
+  DiagnosticCheckStatus _setupItemStatus(String status) {
+    return switch (status) {
+      'available' => DiagnosticCheckStatus.ready,
+      'installable' => DiagnosticCheckStatus.degraded,
+      'missing' => DiagnosticCheckStatus.unavailable,
+      'unsupported' => DiagnosticCheckStatus.unavailable,
+      _ => DiagnosticCheckStatus.unknown,
+    };
+  }
+
+  DiagnosticCheckStatus _setupProviderStatus(String status) {
+    return switch (status) {
+      'ready' => DiagnosticCheckStatus.ready,
+      'missing_assets' => DiagnosticCheckStatus.degraded,
+      'missing_model' => DiagnosticCheckStatus.degraded,
+      'missing_api_key' => DiagnosticCheckStatus.degraded,
+      'disabled' => DiagnosticCheckStatus.unknown,
+      _ => DiagnosticCheckStatus.unknown,
+    };
+  }
+
   DiagnosticCheck _startupCheck(EngineStartupResult startup) {
     return DiagnosticCheck(
       name: 'Engine startup',
@@ -384,6 +599,14 @@ class StudioDiagnosticsService {
             detail: 'Plan: ${plan.toUpperCase()} (Expires: $dateFormatted)',
           );
         }
+      }
+      if (statusCode == 404) {
+        return DiagnosticCheck(
+          name: 'User License',
+          status: DiagnosticCheckStatus.degraded,
+          detail:
+              'License endpoint unavailable on this backend build (HTTP 404).',
+        );
       }
       return DiagnosticCheck(
         name: 'User License',

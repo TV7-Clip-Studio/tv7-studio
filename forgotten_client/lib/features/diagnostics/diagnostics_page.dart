@@ -121,6 +121,15 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
               final capabilities = data.checks
                   .where((c) => c.name.startsWith('Engine capability: '))
                   .toList();
+              final setupReadiness = data.checks
+                  .where((c) => c.name.startsWith('Engine setup: '))
+                  .toList();
+              final setupAssets = data.checks
+                  .where((c) => c.name.startsWith('Engine setup asset: '))
+                  .toList();
+              final aiProviders = data.checks
+                  .where((c) => c.name.startsWith('Engine AI provider: '))
+                  .toList();
 
               final backendUsersCheck = _findCheck(
                 data.checks,
@@ -141,6 +150,9 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                 healthCheck: healthCheck,
                 diagCheck: diagCheck,
                 capabilities: capabilities,
+                setupReadiness: setupReadiness,
+                setupAssets: setupAssets,
+                aiProviders: aiProviders,
                 isRunningEndpoints: _isRunningEndpointChecks,
                 endpointResults: endpointResults,
                 onRunEndpoints: _runEndpointChecks,
@@ -278,6 +290,9 @@ class _EnginePanel extends StatelessWidget {
     required this.healthCheck,
     required this.diagCheck,
     required this.capabilities,
+    required this.setupReadiness,
+    required this.setupAssets,
+    required this.aiProviders,
     required this.isRunningEndpoints,
     required this.endpointResults,
     required this.onRunEndpoints,
@@ -287,6 +302,9 @@ class _EnginePanel extends StatelessWidget {
   final DiagnosticCheck? healthCheck;
   final DiagnosticCheck? diagCheck;
   final List<DiagnosticCheck> capabilities;
+  final List<DiagnosticCheck> setupReadiness;
+  final List<DiagnosticCheck> setupAssets;
+  final List<DiagnosticCheck> aiProviders;
   final bool isRunningEndpoints;
   final List<EngineEndpointResult> endpointResults;
   final VoidCallback onRunEndpoints;
@@ -433,6 +451,58 @@ class _EnginePanel extends StatelessWidget {
                   );
                 }).toList(),
               ),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+            ],
+            if (setupReadiness.isNotEmpty) ...[
+              const Text(
+                'Setup Readiness',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: setupReadiness.map((check) {
+                  return _StatusChip(
+                    label: check.name
+                        .replaceFirst('Engine setup: ', '')
+                        .replaceAll('_', ' ')
+                        .toUpperCase(),
+                    status: check.status,
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              ...setupReadiness
+                  .where((check) => check.status != DiagnosticCheckStatus.ready)
+                  .map(
+                    (check) => _SetupDetailRow(
+                      title: check.name.replaceFirst('Engine setup: ', ''),
+                      detail: check.detail,
+                      status: check.status,
+                    ),
+                  ),
+              ...aiProviders.map(
+                (check) => _SetupDetailRow(
+                  title: check.name.replaceFirst('Engine AI provider: ', ''),
+                  detail: check.detail,
+                  status: check.status,
+                ),
+              ),
+              ...setupAssets
+                  .where((check) => check.detail.contains('Action:'))
+                  .map(
+                    (check) => _SetupDetailRow(
+                      title: check.name.replaceFirst(
+                        'Engine setup asset: ',
+                        '',
+                      ),
+                      detail: check.detail,
+                      status: check.status,
+                    ),
+                  ),
               const SizedBox(height: 16),
               const Divider(height: 1),
               const SizedBox(height: 16),
@@ -1010,6 +1080,99 @@ Color _statusColor(BuildContext context, DiagnosticCheckStatus status) {
     DiagnosticCheckStatus.unavailable => Theme.of(context).colorScheme.error,
     DiagnosticCheckStatus.unknown => Theme.of(context).colorScheme.outline,
   };
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.label, required this.status});
+
+  final String label;
+  final DiagnosticCheckStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _statusColor(context, status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildStatusIndicator(context, status, size: 6),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 10,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SetupDetailRow extends StatelessWidget {
+  const _SetupDetailRow({
+    required this.title,
+    required this.detail,
+    required this.status,
+  });
+
+  final String title;
+  final String detail;
+  final DiagnosticCheckStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _statusColor(context, status);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(_statusIcon(status), size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title.replaceAll('_', ' '),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SettingsPanel extends StatelessWidget {

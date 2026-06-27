@@ -16,6 +16,9 @@ class IngestPage extends StatefulWidget {
 
 class _IngestPageState extends State<IngestPage> {
   bool _isProcessing = false;
+  double _progress = 0.0;
+  String? _activeJobId;
+  bool _isCancelling = false;
   String? _statusMessage;
   File? _ingestedFile;
   final List<String> _logs = [];
@@ -42,7 +45,10 @@ class _IngestPageState extends State<IngestPage> {
   Future<void> _handleUrlSubmit(String url) async {
     setState(() {
       _isProcessing = true;
-      _statusMessage = 'Downloading from YouTube...';
+      _isCancelling = false;
+      _progress = 0.0;
+      _activeJobId = null;
+      _statusMessage = 'Starting download...';
       _ingestedFile = null;
       _logs.clear();
     });
@@ -59,6 +65,21 @@ class _IngestPageState extends State<IngestPage> {
             _scrollToBottom();
           }
         },
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() {
+              _progress = progress;
+            });
+          }
+        },
+        onJobStarted: (jobId) {
+          if (mounted) {
+            setState(() {
+              _activeJobId = jobId;
+              _progress = 0.0;
+            });
+          }
+        },
       );
       if (mounted) {
         setState(() {
@@ -69,13 +90,44 @@ class _IngestPageState extends State<IngestPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _statusMessage = 'Error: $e';
+          if (e.toString().contains('cancelled')) {
+            _statusMessage = 'Ingestion cancelled by user';
+          } else {
+            _statusMessage = 'Error: $e';
+          }
         });
       }
     } finally {
       if (mounted) {
         setState(() {
           _isProcessing = false;
+          _activeJobId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _cancelIngestion() async {
+    final jobId = _activeJobId;
+    if (jobId == null || _isCancelling) return;
+
+    setState(() {
+      _isCancelling = true;
+      _statusMessage = 'Sending cancellation request...';
+    });
+
+    try {
+      await widget.mediaService.engineClient.cancelJob(jobId);
+      if (mounted) {
+        setState(() {
+          _statusMessage = 'Cancellation requested. Stopping...';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _statusMessage = 'Failed to cancel job: $e';
+          _isCancelling = false;
         });
       }
     }
@@ -140,17 +192,111 @@ class _IngestPageState extends State<IngestPage> {
             ),
             const SizedBox(height: 32),
             if (_isProcessing)
-              const Center(child: CircularProgressIndicator())
+              Card(
+                elevation: 0,
+                color: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              value: _progress > 0.0 ? _progress : null,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _statusMessage ?? 'Processing...',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          Text(
+                            '${(_progress * 100).toStringAsFixed(0)}%',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: _progress,
+                          minHeight: 6,
+                        ),
+                      ),
+                      if (_activeJobId != null) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _isCancelling
+                                  ? null
+                                  : _cancelIngestion,
+                              icon: _isCancelling
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 1.5,
+                                      ),
+                                    )
+                                  : const Icon(Icons.cancel_outlined, size: 18),
+                              label: Text(
+                                _isCancelling
+                                    ? 'Cancelling...'
+                                    : 'Cancel Ingestion',
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.error,
+                                side: BorderSide(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              )
             else if (_statusMessage != null)
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: _ingestedFile != null
                       ? Colors.green.withValues(alpha: 0.1)
-                      : Colors.red.withValues(alpha: 0.1),
+                      : (_statusMessage!.contains('cancelled')
+                            ? Theme.of(context).colorScheme.secondaryContainer
+                                  .withValues(alpha: 0.2)
+                            : Colors.red.withValues(alpha: 0.1)),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: _ingestedFile != null ? Colors.green : Colors.red,
+                    color: _ingestedFile != null
+                        ? Colors.green
+                        : (_statusMessage!.contains('cancelled')
+                              ? Theme.of(context).colorScheme.secondary
+                              : Colors.red),
                   ),
                 ),
                 child: Text(
@@ -158,7 +304,11 @@ class _IngestPageState extends State<IngestPage> {
                   style: TextStyle(
                     color: _ingestedFile != null
                         ? Colors.green[800]
-                        : Colors.red[800],
+                        : (_statusMessage!.contains('cancelled')
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.onSecondaryContainer
+                              : Colors.red[800]),
                   ),
                 ),
               ),

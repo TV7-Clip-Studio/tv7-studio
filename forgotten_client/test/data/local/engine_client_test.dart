@@ -83,6 +83,143 @@ void main() {
     expect(transport.requested.single.path, '/v1/diagnostics');
   });
 
+  test('getSetupManifest parses setup catalog payload', () async {
+    final transport = _FakeTransport({
+      '/v1/setup/manifest': {
+        'schema_version': 1,
+        'platform': 'macos-arm64',
+        'setup_modes': ['automatic', 'disabled'],
+        'ai_provider_order': ['ollama', 'tv7_managed', 'tv7_cloud'],
+        'assets': [
+          {
+            'id': 'whisper-runtime.user-path',
+            'kind': 'transcription_runtime',
+            'name': 'User-installed Whisper runtime',
+            'required_for': ['transcription', 'offline_creation'],
+            'installable': false,
+            'bundled': false,
+            'source': 'user_path',
+            'version': null,
+            'download': null,
+          },
+          {
+            'id': 'whisper-model.tv7-managed.macos-arm64',
+            'kind': 'transcription_model',
+            'name': 'TV7-managed Whisper model',
+            'required_for': ['transcription'],
+            'installable': true,
+            'bundled': false,
+            'source': 'tv7_managed',
+            'version': null,
+            'download': {
+              'url': 'https://example.com/model.bin',
+              'sha256': 'abc',
+              'size_bytes': 42,
+            },
+          },
+        ],
+      },
+    });
+    final client = EngineClient(
+      baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+      transport: transport,
+    );
+
+    final manifest = await client.getSetupManifest();
+
+    expect(manifest.platform, 'macos-arm64');
+    expect(manifest.effectiveSetupModes, ['automatic', 'disabled']);
+    expect(manifest.effectiveAiProviderOrder, [
+      'ollama',
+      'tv7_managed',
+      'tv7_cloud',
+    ]);
+    expect(manifest.assets.last.installable, isTrue);
+    expect(manifest.assets.last.download?.sizeBytes, 42);
+    expect(transport.requested.single.path, '/v1/setup/manifest');
+  });
+
+  test('getSetupStatus parses readiness payload', () async {
+    final transport = _FakeTransport({
+      '/v1/setup/status': {
+        'schema_version': 1,
+        'setup_complete': false,
+        'active_ai_provider': 'tv7_cloud',
+        'assets': [
+          {
+            'id': 'whisper-runtime.user-path',
+            'kind': 'transcription_runtime',
+            'name': 'User-installed Whisper runtime',
+            'status': 'available',
+            'source': 'user_path',
+            'path': '/opt/homebrew/bin/whisper-cli',
+            'version': 'whisper.cpp',
+            'error': null,
+          },
+          {
+            'id': 'whisper-model.tv7-managed.macos-arm64',
+            'kind': 'transcription_model',
+            'name': 'TV7-managed Whisper model',
+            'status': 'installable',
+            'source': 'tv7_managed',
+            'path': '/tmp/models/whisper',
+            'version': null,
+            'error': 'download requires explicit user confirmation',
+          },
+        ],
+        'ai_providers': [
+          {
+            'source': 'tv7_cloud',
+            'status': 'ready',
+            'required_assets': <String>[],
+            'requires_internet': true,
+            'requires_user_confirmation': false,
+            'cost_policy': 'tv7_managed_usage',
+            'action': null,
+          },
+        ],
+        'capabilities': [
+          {
+            'name': 'transcription',
+            'status': 'not_ready',
+            'provider': null,
+            'missing': ['transcription_model'],
+            'installable': true,
+            'user_action_required': true,
+          },
+          {
+            'name': 'ai',
+            'status': 'ready',
+            'provider': 'tv7_cloud',
+            'missing': <String>[],
+            'installable': true,
+            'user_action_required': false,
+          },
+        ],
+      },
+    });
+    final client = EngineClient(
+      baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+      transport: transport,
+    );
+
+    final status = await client.getSetupStatus();
+
+    expect(status.setupComplete, isFalse);
+    expect(status.effectiveActiveAiProvider, 'tv7_cloud');
+    expect(status.capability('transcription')?.isNotReady, isTrue);
+    expect(status.capability('ai')?.isReady, isTrue);
+    expect(status.aiProviders.single.requiresInternet, isTrue);
+    expect(status.aiProviders.single.costPolicy, 'tv7_managed_usage');
+    expect(status.assets.first.isUserInstalled, isTrue);
+    expect(status.assets.last.isInstallable, isTrue);
+    expect(
+      status.missingAssetsFor(status.capability('transcription')!).single.name,
+      'TV7-managed Whisper model',
+    );
+    expect(transport.requested.single.path, '/v1/setup/status');
+  });
+
   test('probeMedia posts path and parses metadata', () async {
     final transport = _FakeTransport({
       '/v1/media/probe': {
@@ -300,5 +437,76 @@ void main() {
       'output_path': '/tmp/video.vtt',
       'language': 'en',
     });
+  });
+
+  test('startTranscriptGenerate posts request', () async {
+    final transport = _FakeTransport({
+      '/v1/transcripts/generate': {
+        'job': {
+          'id': 'job_g',
+          'kind': 'transcript_generate',
+          'status': 'queued',
+          'progress': 0.0,
+          'logs': ['queued'],
+          'result': null,
+          'error': null,
+          'cancel_requested': false,
+        },
+      },
+    });
+    final client = EngineClient(
+      baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+      transport: transport,
+    );
+
+    final job = await client.startTranscriptGenerate(
+      mediaPath: '/tmp/video.mp4',
+      outputPath: '/tmp/video.vtt',
+      language: 'en',
+    );
+
+    expect(job.id, 'job_g');
+    expect(transport.requested.single.path, '/v1/transcripts/generate');
+    expect(transport.bodies.single, {
+      'media_path': '/tmp/video.mp4',
+      'output_path': '/tmp/video.vtt',
+      'language': 'en',
+    });
+  });
+
+  test('startTranscriptGenerate throws setup-required error', () async {
+    final transport = _FakeTransport({
+      '/v1/transcripts/generate': {
+        'error': 'TRANSCRIPTION_SETUP_REQUIRED',
+        'message':
+            'Local transcription requires a configured runtime and model.',
+        'missing': ['transcription_runtime', 'transcription_model'],
+        'setup_capability': 'transcription',
+      },
+    })..statusCode = 409;
+    final client = EngineClient(
+      baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+      transport: transport,
+    );
+
+    expect(
+      () => client.startTranscriptGenerate(
+        mediaPath: '/tmp/video.mp4',
+        outputPath: '/tmp/video.vtt',
+      ),
+      throwsA(
+        isA<EngineTranscriptionSetupRequiredException>()
+            .having(
+              (error) => error.missing,
+              'missing',
+              contains('transcription_model'),
+            )
+            .having(
+              (error) => error.setupCapability,
+              'setupCapability',
+              'transcription',
+            ),
+      ),
+    );
   });
 }

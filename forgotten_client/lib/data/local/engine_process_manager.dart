@@ -138,6 +138,9 @@ class EngineProcessManager {
   static const _anyUnixExecutableBit = 0x40 | 0x08 | 0x01;
 
   Future<EngineStartupResult> start(EngineSidecarConfig config) async {
+    final existing = await _probeExistingEngine(config.baseUri);
+    if (existing != null) return existing;
+
     final binary = File(config.binaryPath);
     if (!await binary.exists()) {
       return EngineStartupResult(
@@ -210,6 +213,35 @@ class EngineProcessManager {
         status: EngineStartupStatus.degraded,
         baseUri: config.baseUri,
         message: 'Engine health check passed but diagnostics failed: $error',
+      );
+    }
+  }
+
+  Future<EngineStartupResult?> _probeExistingEngine(Uri baseUri) async {
+    final client = EngineClient(baseUri: baseUri, transport: _transport);
+    try {
+      final health = await client.getHealth();
+      if (!health.isOk) return null;
+    } catch (_) {
+      return null;
+    }
+
+    try {
+      final diagnostics = await client.getDiagnostics();
+      final status = diagnostics.isReady
+          ? EngineStartupStatus.ready
+          : EngineStartupStatus.degraded;
+      return EngineStartupResult(
+        status: status,
+        baseUri: baseUri,
+        diagnostics: diagnostics,
+        message: 'Using existing Engine process. ${diagnostics.summary}',
+      );
+    } catch (error) {
+      return EngineStartupResult(
+        status: EngineStartupStatus.degraded,
+        baseUri: baseUri,
+        message: 'Using existing Engine process; diagnostics failed: $error',
       );
     }
   }

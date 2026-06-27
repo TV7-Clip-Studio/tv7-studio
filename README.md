@@ -1,4 +1,4 @@
-# forgotten_client (Flutter desktop + mobile)
+# TV7 Studio
 
 Unofficial Flutter client for the `forgotten-app` backend, focused on local-first media processing (download/normalize/render/transcribe) while syncing metadata to the cloud. Targets desktop (macOS/Windows/Linux) first, with mobile (iOS/Android) as parity follows.
 
@@ -14,12 +14,12 @@ Unofficial Flutter client for the `forgotten-app` backend, focused on local-firs
 
 ## Docs
 - `docs/core/architecture/tv7_high_architecture.md` — canonical high-level architecture (source of truth).
-- `docs/core/repos/tv7-flutter-studio/architecture.md` — repo-level architecture aligned to TV7 Core/Pro and the control plane/worker.
-- `docs/core/roadmaps/tv7-flutter-studio-roadmap.md` — phased delivery plan (Core foundation, pipeline, Pro scheduler, polish).
-- `docs/core/repos/tv7-flutter-studio/backend_integration.md` — FastAPI contract expectations and OpenAPI notes.
-- `docs/core/repos/tv7-flutter-studio/publishing_contract.md` — Pro scheduler ownership and publishing flow contract.
-- `docs/core/repos/tv7-flutter-studio/scaffolding.md` — Flutter project layout, flavors/env, dependencies, OpenAPI integration steps.
-- `docs/core/contracts/openapi/tv7-fastapi-backend/openapi.json` — canonical backend contract artifact consumed by clients.
+- `docs/core/repos/tv7-studio/architecture.md` — repo-level architecture aligned to TV7 Core/Pro and the control plane/worker.
+- `docs/core/roadmaps/tv7-studio-roadmap.md` — phased delivery plan (Core foundation, pipeline, Pro scheduler, polish).
+- `docs/core/repos/tv7-studio/backend_integration.md` — FastAPI contract expectations and OpenAPI notes.
+- `docs/core/repos/tv7-studio/publishing_contract.md` — Pro scheduler ownership and publishing flow contract.
+- `docs/core/repos/tv7-studio/scaffolding.md` — Flutter project layout, flavors/env, dependencies, OpenAPI integration steps.
+- `docs/core/contracts/openapi/tv7-backend/openapi.json` — canonical backend contract artifact consumed by clients.
 
 ## Code layout (early scaffold)
 - `lib/config/app_config.dart` — flavor/env loader via dart-defines.
@@ -40,17 +40,17 @@ Studio expects the Engine repo to live next to this repo:
 
 ```text
 TV7/
-  tv7-flutter-studio/
-  tv7-axum-engine/
+  tv7-studio/
+  tv7-engine/
 ```
 
-Build the Engine from `../tv7-axum-engine` before launching Studio:
+Build the Engine from `../tv7-engine` before launching Studio:
 
 ```sh
 cargo build
 ```
 
-In developer mode Studio resolves the Engine binary at `../tv7-axum-engine/target/debug/engine-service` and launches it automatically on app startup. If that binary is missing, Diagnostics and the startup banner will report the Engine as unavailable.
+In developer mode Studio resolves the Engine binary at `../tv7-engine/target/debug/engine-service` and launches it automatically on app startup. If that binary is missing, Diagnostics and the startup banner will report the Engine as unavailable.
 
 ### Make targets (from repo root)
 - `make help` — list targets.

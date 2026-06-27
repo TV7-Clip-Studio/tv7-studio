@@ -89,6 +89,16 @@ class _FakeTransport implements EngineJsonTransport {
         ],
         'work_dir': {'path': '/tmp/workspace', 'ready': true, 'error': null},
       };
+    } else if (uri.path == '/v1/setup/manifest') {
+      json = {
+        'schema_version': 1,
+        'platform': 'macos-arm64',
+        'setup_modes': ['automatic', 'disabled'],
+        'ai_provider_order': ['ollama', 'tv7_managed', 'tv7_cloud'],
+        'assets': <Map<String, dynamic>>[],
+      };
+    } else if (uri.path == '/v1/setup/status') {
+      json = _setupStatusPayload();
     } else if (uri.path.startsWith('/v1/media/')) {
       json = {'result': 'ok'};
     } else if (uri.path == '/v1/ingest/url' ||
@@ -121,6 +131,116 @@ class _FakeTransport implements EngineJsonTransport {
       rawBody: json.toString(),
     );
   }
+}
+
+class _SetupDownTransport extends _FakeTransport {
+  @override
+  Future<EngineHttpResponse> request(
+    String method,
+    Uri uri, {
+    Map<String, dynamic>? body,
+  }) {
+    if (uri.path == '/v1/setup/manifest' || uri.path == '/v1/setup/status') {
+      throw const SocketException('setup endpoint down');
+    }
+    return super.request(method, uri, body: body);
+  }
+}
+
+Map<String, dynamic> _setupStatusPayload() {
+  return {
+    'schema_version': 1,
+    'setup_complete': false,
+    'active_ai_provider': 'tv7_cloud',
+    'assets': [
+      {
+        'id': 'whisper-runtime.user-path',
+        'kind': 'transcription_runtime',
+        'name': 'User-installed Whisper runtime',
+        'status': 'missing',
+        'source': 'user_path',
+        'path': null,
+        'version': null,
+        'error': 'not configured',
+      },
+      {
+        'id': 'whisper-model.tv7-managed.macos-arm64',
+        'kind': 'transcription_model',
+        'name': 'TV7-managed Whisper model',
+        'status': 'installable',
+        'source': 'tv7_managed',
+        'path': '/tmp/models/whisper',
+        'version': null,
+        'error': 'download requires explicit user confirmation',
+      },
+      {
+        'id': 'ollama.user-runtime',
+        'kind': 'llm_runtime',
+        'name': 'User-installed Ollama runtime',
+        'status': 'available',
+        'source': 'ollama',
+        'path': '/usr/local/bin/ollama',
+        'version': 'ollama 0.9',
+        'error': null,
+      },
+      {
+        'id': 'ollama.model.qwen',
+        'kind': 'llm_model',
+        'name': 'Selected Ollama model',
+        'status': 'available',
+        'source': 'ollama',
+        'path': null,
+        'version': 'qwen2.5',
+        'error': null,
+      },
+    ],
+    'ai_providers': [
+      {
+        'source': 'ollama',
+        'status': 'missing_assets',
+        'required_assets': ['llm_runtime', 'llm_model'],
+        'requires_internet': false,
+        'requires_user_confirmation': true,
+        'cost_policy': 'user_local',
+        'action': 'Install Ollama and configure a compatible model.',
+      },
+      {
+        'source': 'tv7_cloud',
+        'status': 'ready',
+        'required_assets': <String>[],
+        'requires_internet': true,
+        'requires_user_confirmation': false,
+        'cost_policy': 'tv7_managed_usage',
+        'action': null,
+      },
+    ],
+    'capabilities': [
+      {
+        'name': 'transcription',
+        'status': 'not_ready',
+        'provider': null,
+        'missing': ['transcription_runtime', 'transcription_model'],
+        'installable': true,
+        'user_action_required': true,
+      },
+      {
+        'name': 'ai',
+        'status': 'ready',
+        'provider': 'tv7_cloud',
+        'missing': <String>[],
+        'installable': true,
+        'user_action_required': false,
+      },
+      {
+        'name': 'offline_creation',
+        'status': 'not_ready',
+        'provider': null,
+        'missing': ['transcription', 'local_ai'],
+        'installable': true,
+        'user_action_required': true,
+      },
+    ],
+  };
 }
 
 class _BackendAdapter implements HttpClientAdapter {
@@ -212,6 +332,51 @@ void main() {
       );
       expect(
         snapshot.checks.map((check) => check.name),
+        contains('Engine /v1/setup/status'),
+      );
+      expect(
+        snapshot.checks.map((check) => check.name),
+        contains('Engine /v1/setup/manifest'),
+      );
+      expect(
+        snapshot.checks.map((check) => check.name),
+        contains('Engine setup: transcription'),
+      );
+      expect(
+        snapshot.checks.map((check) => check.name),
+        contains('Engine setup: ai'),
+      );
+      final transcriptionCheck = snapshot.checks.firstWhere(
+        (check) => check.name == 'Engine setup: transcription',
+      );
+      expect(transcriptionCheck.detail, contains('Set up transcription'));
+      expect(transcriptionCheck.detail, contains('explicit user confirmation'));
+      final aiCheck = snapshot.checks.firstWhere(
+        (check) => check.name == 'Engine setup: ai',
+      );
+      expect(aiCheck.status, DiagnosticCheckStatus.ready);
+      expect(aiCheck.detail, contains('TV7 cloud AI'));
+      final offlineCreationCheck = snapshot.checks.firstWhere(
+        (check) => check.name == 'Engine setup: offline_creation',
+      );
+      expect(offlineCreationCheck.status, DiagnosticCheckStatus.degraded);
+      expect(offlineCreationCheck.detail, contains('local_ai'));
+      final cloudProviderCheck = snapshot.checks.firstWhere(
+        (check) => check.name == 'Engine AI provider: tv7_cloud',
+      );
+      expect(cloudProviderCheck.status, DiagnosticCheckStatus.ready);
+      expect(cloudProviderCheck.detail, contains('requires_internet=true'));
+      expect(cloudProviderCheck.detail, contains('active=true'));
+      final installableAssetCheck = snapshot.checks.firstWhere(
+        (check) =>
+            check.name == 'Engine setup asset: TV7-managed Whisper model',
+      );
+      expect(
+        installableAssetCheck.detail,
+        contains('explicit user confirmation'),
+      );
+      expect(
+        snapshot.checks.map((check) => check.name),
         contains('Backend /api/v1/users/'),
       );
       expect(
@@ -227,6 +392,50 @@ void main() {
 
       expect(snapshot.settings['Flavor'], 'test');
       expect(snapshot.recentErrors.single.source, 'test source');
+    },
+  );
+
+  test(
+    'collect reports setup endpoint failures separately from health',
+    () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://api.test.local'))
+        ..httpClientAdapter = _BackendAdapter();
+      final service = StudioDiagnosticsService(
+        appConfig: AppConfig(
+          flavor: 'test',
+          apiBaseUrl: Uri.parse('https://api.test.local'),
+          openAiMode: 'cloud',
+          featureFlags: const {},
+          appLogLevel: 'debug',
+        ),
+        engineClient: EngineClient(
+          baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+          transport: _SetupDownTransport(),
+        ),
+        dio: dio,
+        diagnosticsLog: DiagnosticsLog(),
+        engineStartup: () => EngineStartupResult(
+          status: EngineStartupStatus.ready,
+          baseUri: Uri(scheme: 'http', host: '127.0.0.1', port: 7070),
+        ),
+      );
+
+      final snapshot = await service.collect();
+      final healthCheck = snapshot.checks.firstWhere(
+        (check) => check.name == 'Engine /health',
+      );
+      final manifestCheck = snapshot.checks.firstWhere(
+        (check) => check.name == 'Engine /v1/setup/manifest',
+      );
+      final statusCheck = snapshot.checks.firstWhere(
+        (check) => check.name == 'Engine /v1/setup/status',
+      );
+
+      expect(healthCheck.status, DiagnosticCheckStatus.ready);
+      expect(manifestCheck.status, DiagnosticCheckStatus.degraded);
+      expect(manifestCheck.detail, contains('Setup manifest unavailable'));
+      expect(statusCheck.status, DiagnosticCheckStatus.degraded);
+      expect(statusCheck.detail, contains('Setup readiness unavailable'));
     },
   );
 
@@ -256,6 +465,11 @@ void main() {
     final results = await service.runEngineEndpointSmokeChecks();
 
     expect(results.map((result) => result.path), contains('/v1/media/probe'));
+    expect(
+      results.map((result) => result.path),
+      contains('/v1/setup/manifest'),
+    );
+    expect(results.map((result) => result.path), contains('/v1/setup/status'));
     expect(
       results.map((result) => result.path),
       contains('/v1/media/thumbnail'),

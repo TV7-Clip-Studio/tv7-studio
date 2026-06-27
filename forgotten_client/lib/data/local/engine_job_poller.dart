@@ -32,6 +32,7 @@ class EngineJobPoller {
   Future<EngineJob> waitFor(
     EngineJob started, {
     void Function(String)? onLog,
+    void Function(double progress)? onProgress,
     bool fetchLogs = true,
   }) async {
     var job = started;
@@ -57,6 +58,8 @@ class EngineJobPoller {
     }
 
     emitLogs(job.logs);
+    onProgress?.call(job.progress);
+
     while (!job.isTerminal) {
       ensureWithinDeadline();
 
@@ -67,6 +70,7 @@ class EngineJobPoller {
 
       try {
         job = await engineClient.getJob(job.id);
+        onProgress?.call(job.progress);
       } catch (error) {
         if (!_isRetryablePollingError(error)) rethrow;
         interval = _nextInterval(interval);
@@ -86,6 +90,7 @@ class EngineJobPoller {
     }
 
     emitLogs(job.logs);
+    onProgress?.call(job.progress);
     return job;
   }
 

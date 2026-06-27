@@ -170,12 +170,38 @@ void main() {
     },
   );
 
+  test(
+    'uses an already healthy Engine without launching another process',
+    () async {
+      final process = _FakeProcess();
+      final launcher = _FakeLauncher(process);
+      final transport = _FakeTransport(
+        diagnostics: {'status': 'ready', 'tools': <Map<String, dynamic>>[]},
+      );
+      final manager = EngineProcessManager(
+        launcher: launcher,
+        transport: transport,
+      );
+
+      final result = await manager.start(config());
+
+      expect(result.status, EngineStartupStatus.ready);
+      expect(result.message, contains('Using existing Engine process'));
+      expect(launcher.startCount, 0);
+      expect(transport.requested.map((uri) => uri.path), [
+        '/health',
+        '/v1/diagnostics',
+      ]);
+    },
+  );
+
   test('surfaces degraded diagnostics without stopping Engine', () async {
     final process = _FakeProcess();
     final launcher = _FakeLauncher(process);
     final manager = EngineProcessManager(
       launcher: launcher,
       transport: _FakeTransport(
+        healthFailures: 1,
         diagnostics: {
           'status': 'degraded',
           'tools': [
@@ -197,7 +223,10 @@ void main() {
     final launcher = _FakeLauncher(process);
     final manager = EngineProcessManager(
       launcher: launcher,
-      transport: _FakeTransport(diagnostics: {'status': 'ready'}),
+      transport: _FakeTransport(
+        diagnostics: {'status': 'ready'},
+        healthFailures: 1,
+      ),
     );
 
     final result = await manager.start(
@@ -222,7 +251,10 @@ void main() {
     final launcher = _FakeLauncher(process);
     final manager = EngineProcessManager(
       launcher: launcher,
-      transport: _FakeTransport(diagnostics: {'status': 'ready'}),
+      transport: _FakeTransport(
+        diagnostics: {'status': 'ready'},
+        healthFailures: 1,
+      ),
     );
 
     final result = await manager.start(config());
@@ -240,7 +272,10 @@ void main() {
     final launcher = _FakeLauncher(process);
     final manager = EngineProcessManager(
       launcher: launcher,
-      transport: _FakeTransport(diagnostics: {'status': 'ready'}),
+      transport: _FakeTransport(
+        diagnostics: {'status': 'ready'},
+        healthFailures: 1,
+      ),
     );
 
     final result = await manager.start(
@@ -262,7 +297,10 @@ void main() {
     final process = _FakeProcess();
     final manager = EngineProcessManager(
       launcher: _FakeLauncher(process),
-      transport: _FakeTransport(diagnostics: {'status': 'ready'}),
+      transport: _FakeTransport(
+        diagnostics: {'status': 'ready'},
+        healthFailures: 1,
+      ),
     );
 
     await manager.start(config());
@@ -275,7 +313,10 @@ void main() {
     final process = _FakeProcess(initiallyExited: true);
     final manager = EngineProcessManager(
       launcher: _FakeLauncher(process),
-      transport: _FakeTransport(diagnostics: {'status': 'ready'}),
+      transport: _FakeTransport(
+        diagnostics: {'status': 'ready'},
+        healthFailures: 1,
+      ),
     );
 
     await manager.start(config());
@@ -288,7 +329,10 @@ void main() {
     final process = _FakeProcess(killResult: false);
     final manager = EngineProcessManager(
       launcher: _FakeLauncher(process),
-      transport: _FakeTransport(diagnostics: {'status': 'ready'}),
+      transport: _FakeTransport(
+        diagnostics: {'status': 'ready'},
+        healthFailures: 1,
+      ),
     );
 
     await manager.start(config());

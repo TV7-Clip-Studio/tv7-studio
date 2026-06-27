@@ -172,10 +172,14 @@ void main() {
         ),
       );
       final logs = <String>[];
+      final progressValues = <double>[];
+      final jobIds = <String>[];
 
       final file = await service.prepareIngestFromUrl(
         'https://example.com/video',
         onLog: logs.add,
+        onProgress: progressValues.add,
+        onJobStarted: jobIds.add,
       );
 
       expect(
@@ -189,6 +193,9 @@ void main() {
       expect(file.existsSync(), isTrue);
       expect(File('${file.path}.meta.json').existsSync(), isTrue);
       expect(logs, contains('completed'));
+      expect(progressValues, contains(0.0));
+      expect(progressValues, contains(1.0));
+      expect(jobIds, containsAllInOrder(['job_ingest', 'job_transcript']));
     },
   );
 
