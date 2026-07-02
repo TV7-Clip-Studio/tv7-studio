@@ -15,11 +15,13 @@ class DiagnosticCheck {
     required this.name,
     required this.status,
     required this.detail,
+    this.metadata = const <String, Object?>{},
   });
 
   final String name;
   final DiagnosticCheckStatus status;
   final String detail;
+  final Map<String, Object?> metadata;
 }
 
 class StudioDiagnosticsSnapshot {
@@ -581,22 +583,36 @@ class StudioDiagnosticsService {
       if (statusCode >= 200 && statusCode < 300) {
         final data = response.data;
         if (data is Map<String, dynamic>) {
-          final plan = data['plan']?.toString() ?? 'unknown';
-          final expiresAtStr = data['expires_at']?.toString();
-          String dateFormatted = 'unknown';
-          if (expiresAtStr != null) {
-            try {
-              final parsedDate = DateTime.parse(expiresAtStr);
-              dateFormatted =
-                  '${parsedDate.year}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}';
-            } catch (_) {
-              dateFormatted = expiresAtStr;
-            }
-          }
+          final accountActive = data['account_active'] == true;
+          final licenseStatus =
+              data['license_status']?.toString() ?? 'required';
+          final cloudAiAvailable = data['cloud_ai_available'] == true;
+          final canRequestToken =
+              data['can_request_engine_cloud_ai_token'] == true;
+          final rawCredits = data['cloud_ai_credits_remaining'];
+          final credits = rawCredits is num
+              ? rawCredits.toInt()
+              : int.tryParse(rawCredits?.toString() ?? '') ?? 0;
+          final reasonCode = data['reason_code']?.toString() ?? 'UNKNOWN';
+          final scope =
+              data['engine_cloud_ai_scope']?.toString() ?? 'engine:cloud_ai';
+          final isReady = accountActive && cloudAiAvailable && canRequestToken;
           return DiagnosticCheck(
             name: 'User License',
-            status: DiagnosticCheckStatus.ready,
-            detail: 'Plan: ${plan.toUpperCase()} (Expires: $dateFormatted)',
+            status: isReady
+                ? DiagnosticCheckStatus.ready
+                : DiagnosticCheckStatus.degraded,
+            detail:
+                'status=$licenseStatus | cloud_ai=${cloudAiAvailable ? 'ready' : 'unavailable'} | credits=$credits | reason=$reasonCode',
+            metadata: <String, Object?>{
+              'account_active': accountActive,
+              'license_status': licenseStatus,
+              'cloud_ai_available': cloudAiAvailable,
+              'cloud_ai_credits_remaining': credits,
+              'can_request_engine_cloud_ai_token': canRequestToken,
+              'engine_cloud_ai_scope': scope,
+              'reason_code': reasonCode,
+            },
           );
         }
       }
