@@ -116,6 +116,26 @@ class _FakeDiagnosticsService extends StudioDiagnosticsService {
           detail:
               'status=ready | source=tv7_cloud | active=true | requires_internet=true | cost_policy=tv7_managed_usage',
         ),
+        DiagnosticCheck(
+          name: 'Backend /api/v1/users/',
+          status: DiagnosticCheckStatus.ready,
+          detail: 'HTTP 200 from https://api.test.local',
+        ),
+        DiagnosticCheck(
+          name: 'User License',
+          status: DiagnosticCheckStatus.ready,
+          detail:
+              'status=active | cloud_ai=ready | credits=1001000000 | reason=READY',
+          metadata: <String, Object?>{
+            'account_active': true,
+            'license_status': 'active',
+            'cloud_ai_available': true,
+            'cloud_ai_credits_remaining': 1001000000,
+            'can_request_engine_cloud_ai_token': true,
+            'engine_cloud_ai_scope': 'engine:cloud_ai',
+            'reason_code': 'READY',
+          },
+        ),
       ],
       endpointResults: const [
         EngineEndpointResult(
@@ -255,6 +275,27 @@ void main() {
     expect(find.textContaining('requires_internet=true'), findsOneWidget);
     expect(find.textContaining('local_llm'), findsNothing);
     expect(find.textContaining('cloud_llm'), findsNothing);
+  });
+
+  testWidgets('diagnostics page renders cloud AI credits', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(),
+        home: DiagnosticsPage(
+          service: _FakeDiagnosticsService(),
+          diagnosticsLog: DiagnosticsLog(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('User License'), findsOneWidget);
+    expect(find.text('ACTIVE'), findsOneWidget);
+    expect(find.text('Cloud AI READY'), findsOneWidget);
+    expect(
+      find.text('1,001,000,000 credits · Credits do not expire'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('diagnostics page renders collection errors', (tester) async {

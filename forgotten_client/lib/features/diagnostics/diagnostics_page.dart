@@ -810,7 +810,7 @@ class _BackendPanel extends StatelessWidget {
                 title: 'User License',
                 detail: licenseCheck!.detail,
                 status: licenseCheck!.status,
-                isLicense: true,
+                licenseMetadata: licenseCheck!.metadata,
               ),
             ],
           ],
@@ -824,48 +824,60 @@ class _BackendPanel extends StatelessWidget {
     required String title,
     required String detail,
     required DiagnosticCheckStatus status,
-    bool isLicense = false,
+    Map<String, Object?>? licenseMetadata,
   }) {
     Widget valueWidget;
-    if (isLicense && status == DiagnosticCheckStatus.ready) {
-      final planMatch = RegExp(r'Plan:\s*([A-Z]+)').firstMatch(detail);
-      final expiresMatch = RegExp(r'Expires:\s*([^\)]+)').firstMatch(detail);
+    if (licenseMetadata != null) {
+      final licenseStatus =
+          licenseMetadata['license_status']?.toString().toUpperCase() ??
+          'REQUIRED';
+      final cloudAiAvailable = licenseMetadata['cloud_ai_available'] == true;
+      final credits =
+          licenseMetadata['cloud_ai_credits_remaining'] as int? ?? 0;
 
-      final plan = planMatch?.group(1) ?? 'UNKNOWN';
-      final expires = expiresMatch?.group(1) ?? '';
-
-      valueWidget = Row(
-        mainAxisSize: MainAxisSize.min,
+      valueWidget = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.greenAccent.shade400.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: Colors.greenAccent.shade400.withValues(alpha: 0.3),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.greenAccent.shade400.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: Colors.greenAccent.shade400.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  licenseStatus,
+                  style: TextStyle(
+                    color: Colors.greenAccent.shade400,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
-            ),
-            child: Text(
-              plan,
-              style: TextStyle(
-                color: Colors.greenAccent.shade400,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
+              const SizedBox(width: 8),
+              Text(
+                'Cloud AI ${cloudAiAvailable ? 'READY' : 'UNAVAILABLE'}',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.outline,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${_formatCredits(credits)} credits · Credits do not expire',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.outline,
+              fontSize: 11,
             ),
           ),
-          if (expires.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            Text(
-              'Expires: $expires',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.outline,
-                fontSize: 11,
-              ),
-            ),
-          ],
         ],
       );
     } else {
@@ -902,6 +914,11 @@ class _BackendPanel extends StatelessWidget {
         _buildStatusIndicator(context, status),
       ],
     );
+  }
+
+  String _formatCredits(int value) {
+    final digits = value.toString();
+    return digits.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
   }
 }
 

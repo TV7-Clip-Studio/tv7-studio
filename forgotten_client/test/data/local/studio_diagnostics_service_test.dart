@@ -252,7 +252,7 @@ class _BackendAdapter implements HttpClientAdapter {
   ) async {
     if (options.path.contains('/auth/license')) {
       return ResponseBody.fromString(
-        '{"plan": "pro", "license_token": "token_abc", "expires_at": "2026-12-31T23:59:59Z"}',
+        '{"account_active": true, "license_status": "active", "cloud_ai_available": true, "cloud_ai_credits_remaining": 1001000000, "can_request_engine_cloud_ai_token": true, "engine_cloud_ai_scope": "engine:cloud_ai", "reason_code": "READY"}',
         200,
         headers: {
           Headers.contentTypeHeader: [Headers.jsonContentType],
@@ -387,8 +387,10 @@ void main() {
         (c) => c.name == 'User License',
       );
       expect(licenseCheck.status, DiagnosticCheckStatus.ready);
-      expect(licenseCheck.detail, contains('Plan: PRO'));
-      expect(licenseCheck.detail, contains('Expires: 2026-12-31'));
+      expect(licenseCheck.detail, contains('status=active'));
+      expect(licenseCheck.detail, contains('cloud_ai=ready'));
+      expect(licenseCheck.metadata['cloud_ai_credits_remaining'], 1001000000);
+      expect(licenseCheck.metadata['reason_code'], 'READY');
 
       expect(snapshot.settings['Flavor'], 'test');
       expect(snapshot.recentErrors.single.source, 'test source');
