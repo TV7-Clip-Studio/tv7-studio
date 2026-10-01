@@ -1,1 +1,8 @@
-forgotten_client/.pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: studio-check
+        name: Studio lint and browser build
+        entry: make check
+        language: system
+        pass_filenames: false

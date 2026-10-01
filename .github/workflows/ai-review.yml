@@ -10,54 +10,9 @@ permissions:
   issues: write
 
 jobs:
-  determine-context:
-    runs-on: ubuntu-latest
-    outputs:
-      info: ${{ steps.context.outputs.info }}
-    steps:
-      - name: Determine Flutter context
-        id: context
-        run: |
-          set -eo pipefail
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import re
-          from pathlib import Path
-
-          candidates = [Path("pubspec.yaml"), Path("forgotten_client/pubspec.yaml")]
-          pubspec = next((p for p in candidates if p.exists()), None)
-
-          if not pubspec:
-              print("info=Flutter project: pubspec.yaml not found")
-          else:
-              text = pubspec.read_text(encoding="utf-8")
-              sdk_match = re.search(r'^\s*sdk:\s*"?(?P<v>[^"\n]+)', text, re.M)
-              dart_sdk = sdk_match.group("v") if sdk_match else "unknown"
-
-              deps = []
-              in_deps = False
-              for line in text.splitlines():
-                  if re.match(r'^\s*dependencies:\s*$', line):
-                      in_deps = True
-                      continue
-                  if in_deps and re.match(r'^\S', line):
-                      break
-                  if in_deps:
-                      m = re.match(r'^\s{2,}([A-Za-z0-9_]+):\s*([^\s#]+)', line)
-                      if m:
-                          name, ver = m.group(1), m.group(2)
-                          if name in {"flutter", "sdk"}:
-                              continue
-                          if len(deps) < 4:
-                              deps.append(f"{name} {ver}")
-
-              info = f"Flutter/Dart sdk {dart_sdk}; key deps: {', '.join(deps) if deps else 'n/a'} (from {pubspec})"
-              print(f"info={info}")
-          PY
-
   deepseek-review:
-    needs: determine-context
     uses: TV7-Clip-Studio/tv7-core/.github/workflows/deepseek-review.yml@main
     with:
-      project_context: ${{ needs.determine-context.outputs.info }}
-      architecture_doc: flutter_architecture.md
+      project_context: "TV7 Studio: React/TypeScript UI in Tauri desktop shell with local Rust Engine sidecar"
+      architecture_doc: studio_architecture.md
     secrets: inherit

@@ -1,60 +1,29 @@
-APP_DIR := forgotten_client
-FLAVOR ?= dev
-ENV_FILE ?= .env.$(FLAVOR)
-DEVICE ?= macos
-NO_FLAVOR ?= 0
+.PHONY: help install lint build check run-web run-desktop package
 
-ifeq ($(NO_FLAVOR),1)
-RUN_FLAVOR_FLAG :=
-else
-RUN_FLAVOR_FLAG := --flavor $(FLAVOR)
-endif
-
-CORE_DIR := ../tv7-core
-ifeq ("$(wildcard $(CORE_DIR))","")
-$(error tv7-core not found. Please clone it as a sibling directory: ../tv7-core)
-endif
-
-define FLUTTER
-	@cd $(APP_DIR) && $(1)
-endef
-
-.PHONY: help
 help:
-	@echo "Common targets:"
-	@echo "  make format       - dart format lib/ test/"
-	@echo "  make analyze      - flutter analyze"
-	@echo "  make test         - flutter test"
-	@echo "  make check        - format + analyze + test"
-	@echo "  make run          - flutter run $(RUN_FLAVOR_FLAG) --dart-define-from-file=$(ENV_FILE)"
-	@echo "      vars: FLAVOR=$(FLAVOR) ENV_FILE=$(ENV_FILE)"
-	@echo "  make run-desktop  - flutter run -d $(DEVICE) (no flavor flag; useful for macOS/Windows/Linux)"
-	@echo "      vars: DEVICE=$(DEVICE) ENV_FILE=$(ENV_FILE)"
-	@echo "  make gen-api      - regenerate OpenAPI client (requires openapi/forgotten-app.yaml)"
+	@echo "TV7 Studio (React/Tauri)"
+	@echo "  make install      npm ci"
+	@echo "  make check        lint and web build"
+	@echo "  make run-web      Vite browser development server on 127.0.0.1:5173"
+	@echo "  make run-desktop  Tauri development window with local Engine"
+	@echo "  make package      macOS app bundle with local Engine"
 
-.PHONY: format
-format:
-	$(call FLUTTER,dart format lib test)
+install:
+	npm ci
 
-.PHONY: analyze
-analyze:
-	$(call FLUTTER,flutter analyze)
+lint:
+	npm run lint
 
-.PHONY: test
-test:
-	$(call FLUTTER,flutter test)
+build:
+	npm run build
 
-.PHONY: check
-check: format analyze test
+check: lint build
 
-.PHONY: run
-run:
-	$(call FLUTTER,flutter run $(RUN_FLAVOR_FLAG) --dart-define-from-file=$(ENV_FILE))
+run-web:
+	npm run dev -- --host 127.0.0.1 --port 5173
 
-.PHONY: run-desktop
 run-desktop:
-	$(call FLUTTER,flutter run -d $(DEVICE) --dart-define-from-file=$(ENV_FILE))
+	npm run desktop:dev
 
-.PHONY: gen-api
-gen-api:
-	$(call FLUTTER,./tool/generate_api.sh)
+package:
+	npm run desktop:build

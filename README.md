@@ -1,72 +1,38 @@
 # TV7 Studio
 
-Unofficial Flutter client for the `forgotten-app` backend, focused on local-first media processing (download/normalize/render/transcribe) while syncing metadata to the cloud. Targets desktop (macOS/Windows/Linux) first, with mobile (iOS/Android) as parity follows.
+TV7 Studio is the downloadable creator app. Its React/TypeScript interface runs in a Tauri desktop window and, for local development and automation, in a browser. The bundled Rust Engine handles media work on the creator's computer. Backend handles accounts, private storage, schedule drafts, and eventual publishing.
 
-## Status
-- Flutter project scaffolded in `forgotten_client/` with flavor entrypoints (dev/stage/prod) and config wiring via dart-defines.
-- Docs added for roadmap, architecture, and scaffolding. OpenAPI generator config/script stubbed; spec not yet pulled.
+## Current workflow
 
-## Quick objectives
-- Single Flutter codebase for desktop/mobile.
-- Local-heavy media pipeline to keep cloud costs low; backend handles auth/metadata/optional publishing.
-- Local media compute runs through the TV7 Engine sidecar; Studio launches and talks to the sidecar over loopback HTTP.
-- Configurable highlight path: backend/OpenAI vs optional local small model.
+- Import a video file into Engine, or discover a YouTube channel and explicitly select videos to download. A single video URL can also be submitted. YouTube downloads depend on the upstream site and may fail.
+- Import a WebVTT transcript, review timestamp candidates, adjust a range, and render a captioned MP4 locally in Engine. Timing candidates are not viral quality scores.
+- Optionally sign in, approve upload of a finished clip to private Backend storage, and create a YouTube schedule draft. A draft is not a published post.
 
-## Docs
-- `docs/core/architecture/tv7_high_architecture.md` — canonical high-level architecture (source of truth).
-- `docs/core/repos/tv7-studio/architecture.md` — repo-level architecture aligned to TV7 Core/Pro and the control plane/worker.
-- `docs/core/roadmaps/tv7-studio-roadmap.md` — phased delivery plan (Core foundation, pipeline, Pro scheduler, polish).
-- `docs/core/repos/tv7-studio/backend_integration.md` — FastAPI contract expectations and OpenAPI notes.
-- `docs/core/repos/tv7-studio/publishing_contract.md` — Pro scheduler ownership and publishing flow contract.
-- `docs/core/repos/tv7-studio/scaffolding.md` — Flutter project layout, flavors/env, dependencies, OpenAPI integration steps.
-- `docs/core/contracts/openapi/tv7-backend/openapi.json` — canonical backend contract artifact consumed by clients.
+Local import and render do not require Backend login. Studio holds access tokens in memory and does not retain passwords or refresh tokens.
 
-## Code layout (early scaffold)
-- `lib/config/app_config.dart` — flavor/env loader via dart-defines.
-- `lib/app.dart` + `lib/bootstrap.dart` — root widget and bootstrap entry.
-- `lib/main_*.dart` — dev/stage/prod entrypoints (default `main.dart` points to dev).
-- `lib/data/api/api_client.dart` — Dio client with auth interceptor scaffold.
-- `lib/data/auth/*` — token models/store and auth repository placeholders.
+## Develop
 
-## Running (flavors)
-From `forgotten_client/`:
-- Copy env template: `cp .env.dev.example .env.dev` (and stage/prod as needed). These `.env.*` files are JSON maps for `--dart-define-from-file`.
-- Dev: `flutter run --flavor dev --dart-define-from-file=.env.dev`
-- Stage: `flutter run --flavor stage --dart-define-from-file=.env.stage`
-- Prod: `flutter run --flavor prod --dart-define-from-file=.env.prod`
-
-## Engine sidecar setup (developer mode)
-Studio expects the Engine repo to live next to this repo:
-
-```text
-TV7/
-  tv7-studio/
-  tv7-engine/
-```
-
-Build the Engine from `../tv7-engine` before launching Studio:
+Prerequisites: Node.js, Rust, a sibling `../tv7-engine` checkout, and Engine's host media tools. The desktop build currently targets macOS.
 
 ```sh
-cargo build
+npm ci
+make check
+make run-web
 ```
 
-In developer mode Studio resolves the Engine binary at `../tv7-engine/target/debug/engine-service` and launches it automatically on app startup. If that binary is missing, Diagnostics and the startup banner will report the Engine as unavailable.
+The browser app opens at `http://127.0.0.1:5173` and needs a separately running Engine at `http://127.0.0.1:7070`. For the coordinated Backend, Engine, and Studio stack, use `make dev-browser-up` from `../tv7-core`. Browser builds may set `VITE_ENGINE_URL` and `VITE_BACKEND_URL` at build time. Engine and Backend must allow the browser origin through CORS.
 
-### Make targets (from repo root)
-- `make help` — list targets.
-- `make format` — `flutter format lib test`.
-- `make analyze` — `flutter analyze`.
-- `make test` — `flutter test`.
-- `make check` — format + analyze + test.
-- `make run FLAVOR=dev` — run with `.env.dev` (override `ENV_FILE` as needed).
-- `make run-desktop DEVICE=macos ENV_FILE=.env.dev` — desktop run without flavor flag (useful until macOS/Windows/Linux schemes are flavored).
-- `make gen-api` — regenerate OpenAPI client (spec must exist at `openapi/forgotten-app.yaml`).
+```sh
+make run-desktop
+make package
+```
 
-## OpenAPI client
-- Place the backend spec at `forgotten_client/openapi/forgotten-app.json` (config points there).
-- Regenerate client: `./tool/generate_api.sh` (requires `openapi-generator-cli` on PATH). Generated code lands in `lib/api/generated/`.
+The Tauri package starts its bundled Engine on a dynamic loopback port with a per-launch bearer token and an app-owned work directory. Quitting Studio stops that Engine child. The development browser Engine is a separate process. `make package` compiles the sibling Engine and creates `src-tauri/target/release/bundle/macos/TV7 Studio.app`.
 
-## Next up
-- Wire auth shell (login/refresh storage) and a basic dashboard pulling backend metadata.
-- Integrate OpenAPI client wrapper with auth/retry/logging.
-- Start pipeline scaffolding for local ingest + progress reporting (desktop first).
+## Checks
+
+`make check` runs lint and the web build. `make package` verifies desktop packaging. An isolated Rust toolchain newer than Homebrew Rust 1.86 may be required by current Tauri dependencies; if installed in `.toolchain`, add `.toolchain/cargo/bin` to `PATH` and set `RUSTUP_HOME=.toolchain/rustup` and `CARGO_HOME=.toolchain/cargo` for the package command.
+
+## Release boundaries
+
+The current editor supports timing adjustments for one candidate and has no timeline preview, automatic transcription, or viral scoring. FFmpeg, FFprobe, yt-dlp, and a JavaScript runtime for some downloads still rely on host installation. Windows packaging, signing, updates, provider connections, live scheduled publishing, billing, and paid storage remain release work. A browser tab is for local development; the shipped app is the desktop package.

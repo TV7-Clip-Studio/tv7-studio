@@ -1,4 +1,0 @@
-interface:
-  display_name: "Studio Feature Slice"
-  short_description: "Implement a feature across UI, data, and tests"
-  default_prompt: "Use $studio-feature-vertical-slice to implement one Flutter Studio feature end-to-end with clear architecture boundaries and tests."

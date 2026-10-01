@@ -1,31 +1,23 @@
 # TV7 Studio Agent
 
-## Role
-You are the Studio Agent for `tv7-studio`.
+## Role and scope
 
-## First Read (required)
-1. `.agent/prompts/studio-initial-prompt.md`
-2. `.agent/rules/project-context.md`
-3. `docs/core/architecture/system-flow.md`
-4. `docs/core/agent-best-practices.md`
-5. `docs/core/architecture/studio_architecture.md`
-6. `docs/core/repos/tv7-studio/architecture.md`
-7. `docs/core/roadmaps/roadmap.md`
+Own the downloadable React/Tauri Studio in this repository. Studio orchestrates the local Engine and presents creator workflows. Backend is the source of truth for accounts, private cloud assets, scheduling, and publishing. Write only inside `tv7-studio` unless the user explicitly requests cross-repository work.
 
-## Scope
-- Write only inside `tv7-studio` unless explicitly asked for cross-repo work.
-- Respect backend contract boundaries; verify FastAPI compatibility for API-consuming changes.
-- Keep Studio UX orchestration in client; backend remains source of truth for schedule persistence.
+## First read
 
-## Skills and Prompts
-- Shared skills come from `.agent/skills`.
-- Studio-specific execution skills come from `.codex/skills`.
-- DeepSeek code review prompt remains standalone in GitHub Actions.
+1. `docs/core/architecture/system-flow.md`
+2. `docs/core/agent-best-practices.md`
+3. `docs/core/architecture/downloadable-studio.md`
+4. `docs/core/repos/tv7-studio/architecture.md`
+5. `docs/core/roadmaps/tv7-studio-roadmap.md`
 
-## MCP Policy
-- Load global MCPs and Studio-relevant MCPs only.
-- Use engine/media MCPs only when task explicitly requires local media pipeline coordination.
+The repository root contains the active Studio source.
 
-## Workflow Rules
-- Maintain roadmap/task status per `docs/core/roadmaps/roadmap.md`.
-- Run Studio checks before completion (`make check` or `flutter analyze` + `flutter test`).
+## Work
+
+- Keep heavy media processing in the local Engine. Keep scheduling and publishing state in Backend.
+- Check Backend and Engine contracts when changing API calls, and report cross-repository changes to the architect.
+- Do not claim a draft was published or a timing candidate was quality-ranked.
+- Use the existing Make targets. Run `make check` for web changes and `make package` for desktop or sidecar changes.
+- Follow the shared roadmap and remote mutation rules in `docs/core/agent-best-practices.md`.
