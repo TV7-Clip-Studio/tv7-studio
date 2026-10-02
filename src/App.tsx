@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 
@@ -18,7 +18,7 @@ type Job = {
   status: string;
   progress?: number;
   error?: string;
-  result?: { media_path?: string | null; url?: string; metadata?: unknown };
+  result?: { media_path?: string | null; transcript_path?: string | null; url?: string; metadata?: unknown };
 };
 type BatchJob = { title: string; jobId: string; job?: Job };
 type Diagnostics = {
@@ -43,6 +43,16 @@ type Candidate = {
   end_seconds: number;
   text: string;
   cue_count: number;
+};
+type ClipDraft = Candidate & {
+  id: string;
+  start: string;
+  end: string;
+  captionText: string;
+  burnSubtitles: boolean;
+  result?: RenderResult;
+  error?: string;
+  rendering?: boolean;
 };
 type RenderResult = {
   output_path: string;
@@ -159,6 +169,8 @@ async function backendRequest<T>(
 }
 
 export default function App() {
+  const mediaVersion = useRef(0);
+  const sourcePlayer = useRef<HTMLVideoElement | null>(null);
   const [page, setPage] = useState<Page>("overview");
   const [connection, setConnection] = useState<EngineConnection>(() =>
     isTauri()
@@ -191,6 +203,9 @@ export default function App() {
   const [transcriptBusy, setTranscriptBusy] = useState(false);
   const [transcriptError, setTranscriptError] = useState("");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [clipCount, setClipCount] = useState(5);
+  const [clipDrafts, setClipDrafts] = useState<ClipDraft[]>([]);
+  const [batchRendering, setBatchRendering] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(
     null,
   );
@@ -200,6 +215,8 @@ export default function App() {
   const [renderError, setRenderError] = useState("");
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [sourcePreviewUrl, setSourcePreviewUrl] = useState<string | null>(null);
+  const [sourcePreviewError, setSourcePreviewError] = useState("");
   const [previewError, setPreviewError] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
   const [accountPassword, setAccountPassword] = useState("");
@@ -234,6 +251,28 @@ export default function App() {
   const [batchError, setBatchError] = useState("");
   const [jobs, setJobs] = useState<BatchJob[]>([]);
   const selected = Object.values(selection);
+  const sourceStreamUrl = !token && fileResult?.media_path && base
+    ? `${base}/v1/media/source?path=${encodeURIComponent(fileResult.media_path)}`
+    : null;
+  const sourceDisplayUrl = sourceStreamUrl ?? sourcePreviewUrl;
+  const sourceTooLarge = Boolean(token && (fileResult?.size_bytes ?? 0) > 250 * 1024 * 1024);
+
+  useEffect(() => {
+    if (!fileResult?.media_path || !base || !token || sourceTooLarge) return;
+    const sourceUrl = `${base}/v1/media/source?path=${encodeURIComponent(fileResult.media_path)}`;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const headers = new Headers();
+    headers.set("Authorization", `Bearer ${token}`);
+    void fetch(sourceUrl, { headers })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Source preview unavailable: HTTP ${response.status}`);
+        const blob = await response.blob();
+        if (!cancelled) { objectUrl = URL.createObjectURL(blob); setSourcePreviewUrl(objectUrl); }
+      })
+      .catch((error: unknown) => { if (!cancelled) setSourcePreviewError(String(error)); });
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [base, fileResult?.media_path, sourceTooLarge, token]);
 
   useEffect(() => {
     if (!renderResult?.media_id || !base) return;
@@ -361,12 +400,83 @@ export default function App() {
     return () => clearInterval(timer);
   }, [base, singleJob, token]);
 
+  async function waitForJob(id: string): Promise<Job> {
+    for (;;) {
+      const job = await request<Job>(base, token, `/v1/jobs/${encodeURIComponent(id)}`);
+      if (job.status === "succeeded") return job;
+      if (["failed", "cancelled"].includes(job.status))
+        throw new Error(job.error || `Engine job ${job.status}`);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+
+  async function proposeClips(path: string, count: number, version: number) {
+    const found = await request<{ candidates: Candidate[] }>(base, token, "/v1/transcripts/candidates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcript_path: path, max_candidates: count }),
+    });
+    if (version !== mediaVersion.current) return;
+    setCandidates(found.candidates);
+    setClipDrafts(found.candidates.map((candidate) => ({
+      ...candidate,
+      id: crypto.randomUUID(),
+      start: candidate.start_seconds.toFixed(2),
+      end: candidate.end_seconds.toFixed(2),
+      captionText: candidate.text,
+      burnSubtitles: true,
+    })));
+  }
+
+  async function prepareTranscript(mediaPath: string, sourceUrl?: string) {
+    const version = mediaVersion.current;
+    setTranscriptBusy(true);
+    setTranscriptError("");
+    try {
+      const parent = mediaPath.slice(0, mediaPath.lastIndexOf("/"));
+      const output_path = `${parent}/transcript-${crypto.randomUUID()}.vtt`;
+      let transcriptPath: string | null = null;
+      if (sourceUrl) {
+        try {
+          const downloaded = await request<{ job: Job }>(base, token, "/v1/transcripts/download", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: sourceUrl, output_path }),
+          });
+          transcriptPath = (await waitForJob(downloaded.job.id)).result?.transcript_path ?? null;
+        } catch {
+          // A missing or unsupported caption track still allows local transcription.
+        }
+      }
+      if (!transcriptPath) {
+        const generated = await request<{ job: Job }>(base, token, "/v1/transcripts/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ media_path: mediaPath, output_path }),
+        });
+        transcriptPath = (await waitForJob(generated.job.id)).result?.transcript_path ?? null;
+      }
+      if (!transcriptPath) throw new Error("Engine completed without a transcript file.");
+      if (version !== mediaVersion.current) return;
+      setTranscript({ name: sourceUrl ? "Source captions or local transcript" : "Local transcript", transcript_id: "", transcript_path: transcriptPath, cue_count: 0, duration_seconds: 0 });
+      await proposeClips(transcriptPath, clipCount, version);
+    } catch (error) {
+      if (version === mediaVersion.current) setTranscriptError(String(error));
+    } finally {
+      if (version === mediaVersion.current) setTranscriptBusy(false);
+    }
+  }
+
   async function upload(file: File) {
+    ++mediaVersion.current;
     setFileBusy(true);
     setFileError("");
+    setSourcePreviewUrl(null);
+    setSourcePreviewError("");
     setFileResult(null);
     setTranscript(null);
     setCandidates([]);
+    setClipDrafts([]);
     setSelectedCandidate(null);
     setRenderResult(null);
     setAsset(null);
@@ -396,12 +506,14 @@ export default function App() {
         setFileResult({ name: file.name, ...result, metadata: probe.metadata });
         setClipStart("0");
         setClipEnd(String(Math.min(30, probe.metadata.duration_seconds ?? 30)));
+        void prepareTranscript(result.media_path);
       } catch (error) {
         setFileResult({
           name: file.name,
           ...result,
           probeError: String(error),
         });
+        void prepareTranscript(result.media_path);
       }
     } catch (error) {
       setFileError(String(error));
@@ -409,11 +521,14 @@ export default function App() {
       setFileBusy(false);
     }
   }
-  async function openDownloadedJob(job: Job, name: string) {
+  async function openDownloadedJob(job: Job, name: string, sourceUrl?: string) {
     const mediaPath = job.result?.media_path;
     if (job.status !== "succeeded" || !mediaPath) return;
     setFileBusy(true);
+    ++mediaVersion.current;
     setDownloadOpenError("");
+    setSourcePreviewUrl(null);
+    setSourcePreviewError("");
     try {
       const probe = await request<{ metadata: MediaMetadata }>(
         base,
@@ -434,6 +549,7 @@ export default function App() {
       });
       setTranscript(null);
       setCandidates([]);
+      setClipDrafts([]);
       setSelectedCandidate(null);
       setClipStart("0");
       setClipEnd(String(Math.min(30, probe.metadata.duration_seconds ?? 30)));
@@ -442,6 +558,7 @@ export default function App() {
       setCloudClip(null);
       setDraft(null);
       setPage("local");
+      void prepareTranscript(mediaPath, sourceUrl ?? job.result?.url);
     } catch (error) {
       setDownloadOpenError(String(error));
     } finally {
@@ -449,10 +566,12 @@ export default function App() {
     }
   }
   async function importTranscript(file: File) {
+    ++mediaVersion.current;
     setTranscriptBusy(true);
     setTranscriptError("");
     setTranscript(null);
     setCandidates([]);
+    setClipDrafts([]);
     setSelectedCandidate(null);
     setRenderResult(null);
     setPreviewUrl(null);
@@ -470,34 +589,14 @@ export default function App() {
         "/v1/transcripts/import",
         { method: "POST", body },
       );
-      const found = await request<{ candidates: Candidate[] }>(
-        base,
-        token,
-        "/v1/transcripts/candidates",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript_path: imported.transcript_path }),
-        },
-      );
+      const version = mediaVersion.current;
       setTranscript({ name: file.name, ...imported });
-      setCandidates(found.candidates);
+      await proposeClips(imported.transcript_path, clipCount, version);
     } catch (error) {
       setTranscriptError(String(error));
     } finally {
       setTranscriptBusy(false);
     }
-  }
-  function chooseCandidate(index: number) {
-    const candidate = candidates[index];
-    setSelectedCandidate(index);
-    setClipStart(candidate.start_seconds.toFixed(2));
-    setClipEnd(candidate.end_seconds.toFixed(2));
-    setRenderError("");
-    setRenderResult(null);
-    setAsset(null);
-    setCloudClip(null);
-    setDraft(null);
   }
   async function renderCandidate() {
     if (!fileResult) return;
@@ -557,6 +656,65 @@ export default function App() {
     } finally {
       setRenderBusy(false);
     }
+  }
+  function updateClip(id: string, patch: Partial<ClipDraft>) {
+    setClipDrafts((current) => current.map((clip) => clip.id === id ? { ...clip, ...patch } : clip));
+    setRenderResult(null);
+    setAsset(null); setCloudClip(null); setDraft(null);
+  }
+  async function renderClip(clip: ClipDraft): Promise<RenderResult> {
+    if (!fileResult) throw new Error("Import a video first.");
+    const start = Number(clip.start);
+    const end = Number(clip.end);
+    const duration = fileResult.metadata?.duration_seconds;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start)
+      throw new Error("End must be after a non-negative start.");
+    if (duration != null && end > duration) throw new Error("End exceeds video duration.");
+    let subtitlePath = clip.burnSubtitles ? transcript?.transcript_path : undefined;
+    if (clip.burnSubtitles && clip.captionText !== clip.text) {
+      const edited = clip.captionText.trim();
+      if (!edited) throw new Error("Enter caption text or turn off Burn subtitles.");
+      const toVttTime = (seconds: number) => {
+        const millis = Math.round(seconds * 1000);
+        const hours = Math.floor(millis / 3600000);
+        const minutes = Math.floor(millis / 60000) % 60;
+        const wholeSeconds = Math.floor(millis / 1000) % 60;
+        return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(wholeSeconds).padStart(2, "0")}.${String(millis % 1000).padStart(3, "0")}`;
+      };
+      const safeText = edited.replaceAll("-->", "→").replaceAll(/\s+/g, " ");
+      const vtt = `WEBVTT\n\n${toVttTime(start)} --> ${toVttTime(end)}\n${safeText}\n`;
+      const body = new FormData();
+      body.append("file", new File([vtt], `clip-caption-${clip.id}.vtt`, { type: "text/vtt" }));
+      const imported = await request<{ transcript_path: string }>(base, token, "/v1/transcripts/import", { method: "POST", body });
+      subtitlePath = imported.transcript_path;
+    }
+    const parent = fileResult.media_path.slice(0, fileResult.media_path.lastIndexOf("/"));
+    const response = await request<{ result: RenderResult }>(base, token, "/v1/media/render-clip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source_path: fileResult.media_path,
+        output_path: `${parent}/clip-${crypto.randomUUID()}.mp4`,
+        start_seconds: start,
+        end_seconds: end,
+        ...(subtitlePath ? { subtitle_path: subtitlePath } : {}),
+      }),
+    });
+    return { ...response.result, start_seconds: start, end_seconds: end, caption_text: clip.captionText };
+  }
+  async function renderDraft(clip: ClipDraft) {
+    updateClip(clip.id, { rendering: true, error: "", result: undefined });
+    try {
+      const result = await renderClip(clip);
+      updateClip(clip.id, { rendering: false, result });
+    } catch (error) {
+      updateClip(clip.id, { rendering: false, error: String(error) });
+    }
+  }
+  async function renderBatch() {
+    setBatchRendering(true);
+    for (const clip of clipDrafts) await renderDraft(clip);
+    setBatchRendering(false);
   }
   async function signIn() {
     setLoginBusy(true);
@@ -998,16 +1156,24 @@ export default function App() {
                     </details>
                   </div>
                 )}
+                {fileResult && <div className="clip-editor">
+                  <h3>Source preview</h3>
+                  {sourceDisplayUrl ? <video ref={sourcePlayer} controls src={sourceDisplayUrl}
+                    aria-label="Source video preview" className="clip-preview" /> :
+                    <p className="note">Loading source preview…</p>}
+                  {sourceTooLarge && <p role="alert" className="error">This source is too large for the desktop preview bridge. Clip rendering remains available.</p>}
+                  {sourcePreviewError && <p role="alert" className="error">{sourcePreviewError}</p>}
+                </div>}
               </section>
               <section className="panel">
                 <span className="kicker">TRANSCRIPT / CLIP</span>
-                <h2>Find a clip from captions</h2>
+                <h2>Review clip batch</h2>
                 <p className="note">
-                  Set start and end times to render a clip. Optionally add a
-                  WebVTT transcript for timing candidates and burned-in
-                  captions. Candidates are timing ranges, not quality scores.
+                  Studio automatically looks for source captions, then asks Engine
+                  to transcribe locally. The proposed ranges are timing candidates,
+                  not quality scores. Edit each clip before rendering.
                 </p>
-                <label htmlFor="transcript-file">WebVTT transcript</label>
+                <label htmlFor="transcript-file">Import a WebVTT transcript instead</label>
                 <input
                   id="transcript-file"
                   type="file"
@@ -1022,7 +1188,7 @@ export default function App() {
                 {!fileResult && (
                   <p className="note">Import a local video first.</p>
                 )}
-                {transcriptBusy && <p role="status">Reading transcript…</p>}
+                {transcriptBusy && <p role="status">Acquiring transcript and proposing clips…</p>}
                 {transcriptError && (
                   <p role="alert" className="error">
                     {transcriptError}
@@ -1030,35 +1196,61 @@ export default function App() {
                 )}
                 {transcript && (
                   <p className="success" role="status">
-                    {transcript.name}: {transcript.cue_count} cues over{" "}
-                    {transcript.duration_seconds.toFixed(1)} seconds
+                    Transcript ready: {transcript.name}
                   </p>
                 )}
+                {fileResult && !transcriptBusy && !transcript && transcriptError && (
+                  <p className="note">Automatic transcription requires Engine's local runtime and model. You can import a WebVTT file above, or render a clip manually without subtitles below.</p>
+                )}
+                <label htmlFor="clip-count">Proposed clip count (1–12)</label>
+                <input id="clip-count" type="number" min="1" max="12" value={clipCount}
+                  onChange={(event) => setClipCount(Math.max(1, Math.min(12, Number(event.target.value) || 1)))} />
+                {transcript && <button type="button" className="secondary" disabled={transcriptBusy}
+                  onClick={() => void proposeClips(transcript.transcript_path, clipCount, mediaVersion.current).catch((error: unknown) => setTranscriptError(String(error)))}>
+                  Refresh proposals
+                </button>}
                 {transcript && candidates.length === 0 && (
                   <p className="note">
                     No candidate ranges found in this transcript.
                   </p>
                 )}
-                {candidates.length > 0 && (
-                  <div className="video-list" aria-label="Clip candidates">
-                    {candidates.map((candidate, index) => (
-                      <button
-                        type="button"
-                        className="candidate-row"
-                        key={`${candidate.start_seconds}-${index}`}
-                        aria-pressed={selectedCandidate === index}
-                        onClick={() => chooseCandidate(index)}
-                      >
-                        <strong>
-                          {candidate.start_seconds.toFixed(1)}–
-                          {candidate.end_seconds.toFixed(1)} s
-                        </strong>
-                        <span>{candidate.text}</span>
-                        <small>{candidate.cue_count} cues</small>
+                {clipDrafts.length > 0 && <>
+                  <button type="button" className="primary" disabled={batchRendering || !ready}
+                    onClick={() => void renderBatch()}>{batchRendering ? "Rendering batch…" : `Render ${clipDrafts.length} clips locally`}</button>
+                  <div className="video-list" aria-label="Clip drafts">
+                    {clipDrafts.map((clip, index) => <div className="clip-editor" key={clip.id}>
+                      <h3>Clip {index + 1}</h3>
+                      <label>Caption text
+                        <textarea value={clip.captionText} rows={3}
+                          onChange={(event) => updateClip(clip.id, { captionText: event.target.value, result: undefined })} />
+                      </label>
+                      {clip.captionText !== clip.text && <p className="note">Edited text will replace this clip's subtitle cues with one cue spanning its selected time range.</p>}
+                      <button type="button" className="secondary" disabled={!sourceDisplayUrl}
+                        onClick={() => { if (sourcePlayer.current) { sourcePlayer.current.currentTime = Number(clip.start); sourcePlayer.current.play().catch(() => {}); } }}>
+                        Play source from start
                       </button>
-                    ))}
+                      <div className="form-row">
+                        <label>Start (seconds)<input type="number" min="0" step="0.01" value={clip.start}
+                          onChange={(event) => updateClip(clip.id, { start: event.target.value, result: undefined })} /></label>
+                        <label>End (seconds)<input type="number" min="0" step="0.01" value={clip.end}
+                          onChange={(event) => updateClip(clip.id, { end: event.target.value, result: undefined })} /></label>
+                      </div>
+                      <div className="form-row">
+                        <button type="button" className="secondary" disabled={!sourceDisplayUrl}
+                          onClick={() => updateClip(clip.id, { start: (sourcePlayer.current?.currentTime ?? 0).toFixed(2), result: undefined })}>Set start at playhead</button>
+                        <button type="button" className="secondary" disabled={!sourceDisplayUrl}
+                          onClick={() => updateClip(clip.id, { end: (sourcePlayer.current?.currentTime ?? 0).toFixed(2), result: undefined })}>Set end at playhead</button>
+                      </div>
+                      <label className="checkbox"><input type="checkbox" checked={clip.burnSubtitles}
+                        onChange={(event) => updateClip(clip.id, { burnSubtitles: event.target.checked, result: undefined })} /> Burn subtitles</label>
+                      <button type="button" className="secondary" disabled={clip.rendering || batchRendering || !ready}
+                        onClick={() => void renderDraft(clip)}>{clip.rendering ? "Rendering…" : clip.result ? "Retry render" : "Render clip"}</button>
+                      {clip.error && <p role="alert" className="error">{clip.error}</p>}
+                      {clip.result && <div className="result"><span>Rendered locally · {clip.result.duration_seconds.toFixed(1)} seconds</span>
+                        <button type="button" className="secondary" onClick={() => { setRenderResult(clip.result ?? null); setAsset(null); setCloudClip(null); setDraft(null); }}>Preview and select for cloud handoff</button></div>}
+                    </div>)}
                   </div>
-                )}
+                </>}
                 {fileResult && (
                   <div className="clip-editor">
                     <h3>
@@ -1388,6 +1580,7 @@ export default function App() {
                             singleJob,
                             singleJob.result?.media_path?.split("/").pop() ??
                               "Downloaded video",
+                            singleUrl,
                           )
                         }
                       >
@@ -1402,8 +1595,8 @@ export default function App() {
                 )}
               </section>
               <p className="note">
-                Studio currently offers timing edits for one candidate clip. A
-                full timeline editor and publishing are later integrations.
+                Batch proposals come from transcript timing. A full timeline
+                editor and publishing are later integrations.
               </p>
             </>
           )}
