@@ -20,7 +20,14 @@ type Job = {
   error?: string;
   result?: { media_path?: string | null; transcript_path?: string | null; url?: string; metadata?: unknown };
 };
-type BatchJob = { title: string; jobId: string; job?: Job };
+type BatchJob = { title: string; url: string; jobId: string; job?: Job };
+type BatchVideo = {
+  status: string;
+  count: number;
+  transcriptPath?: string;
+  clips: ClipDraft[];
+  error?: string;
+};
 type Diagnostics = {
   status?: string;
   capabilities?: { name: string; status: string }[];
@@ -94,6 +101,20 @@ type ScheduleDraft = {
 };
 type Page = "overview" | "local" | "channel";
 type EngineConnection = { base_url: string; token: string };
+const channelStorageKey = "tv7-channel-batch-v1";
+function loadChannelBatch(): { jobs: BatchJob[]; videos: Record<string, BatchVideo> } {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(channelStorageKey) ?? "null") as { jobs?: BatchJob[]; videos?: Record<string, BatchVideo> } | null;
+    if (!saved || !Array.isArray(saved.jobs) || !saved.videos || typeof saved.videos !== "object") return { jobs: [], videos: {} };
+    const videos = Object.fromEntries(Object.entries(saved.videos).map(([id, video]) => [id, {
+      ...video,
+      status: video.status === "Local batch finished. Review each clip." ? video.status : "Interrupted. Retry this video to continue.",
+      clips: Array.isArray(video.clips) ? video.clips.map((clip) => ({ ...clip, rendering: false })) : [],
+    }]));
+    return { jobs: saved.jobs, videos };
+  } catch { return { jobs: [], videos: {} }; }
+}
+const restoredChannelBatch = loadChannelBatch();
 const jobStatus = (job?: Job) =>
   job
     ? `${job.status}${job.progress == null ? "" : ` · ${Math.round(job.progress * 100)}%`}`
@@ -249,13 +270,38 @@ export default function App() {
   const [confirming, setConfirming] = useState(false);
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchError, setBatchError] = useState("");
-  const [jobs, setJobs] = useState<BatchJob[]>([]);
+  const [jobs, setJobs] = useState<BatchJob[]>(restoredChannelBatch.jobs);
+  const [batchVideos, setBatchVideos] = useState<Record<string, BatchVideo>>(restoredChannelBatch.videos);
+  const [batchPreview, setBatchPreview] = useState<{ jobId: string; clipId: string; mediaId: string } | null>(null);
+  const [batchPreviewUrl, setBatchPreviewUrl] = useState<string | null>(null);
+  const [batchPreviewError, setBatchPreviewError] = useState("");
+  const startedBatchVideos = useRef(new Set(Object.keys(restoredChannelBatch.videos)));
+  const batchQueue = useRef<Promise<void>>(Promise.resolve());
   const selected = Object.values(selection);
   const sourceStreamUrl = !token && fileResult?.media_path && base
     ? `${base}/v1/media/source?path=${encodeURIComponent(fileResult.media_path)}`
     : null;
   const sourceDisplayUrl = sourceStreamUrl ?? sourcePreviewUrl;
   const sourceTooLarge = Boolean(token && (fileResult?.size_bytes ?? 0) > 250 * 1024 * 1024);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(channelStorageKey, JSON.stringify({ jobs, videos: batchVideos })); } catch { /* Local storage may be unavailable. */ }
+  }, [jobs, batchVideos]);
+
+  useEffect(() => {
+    if (!batchPreview || !base) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    void fetch(`${base}/v1/media/assets/${encodeURIComponent(batchPreview.mediaId)}`, { headers })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Clip preview unavailable: HTTP ${response.status}`);
+        const blob = await response.blob();
+        if (!cancelled) { objectUrl = URL.createObjectURL(blob); setBatchPreviewUrl(objectUrl); }
+      }).catch((error: unknown) => { if (!cancelled) setBatchPreviewError(String(error)); });
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [base, batchPreview, token]);
 
   useEffect(() => {
     if (!fileResult?.media_path || !base || !token || sourceTooLarge) return;
@@ -267,12 +313,16 @@ export default function App() {
     void fetch(sourceUrl, { headers })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Source preview unavailable: HTTP ${response.status}`);
+        const bytes = Number(response.headers.get("Content-Length"));
+        if (!Number.isFinite(bytes) || bytes <= 0 || bytes > 250 * 1024 * 1024)
+          throw new Error("Source preview exceeds the 250 MiB desktop limit or has unknown size.");
         const blob = await response.blob();
         if (!cancelled) { objectUrl = URL.createObjectURL(blob); setSourcePreviewUrl(objectUrl); }
       })
       .catch((error: unknown) => { if (!cancelled) setSourcePreviewError(String(error)); });
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [base, fileResult?.media_path, sourceTooLarge, token]);
+
 
   useEffect(() => {
     if (!renderResult?.media_id || !base) return;
@@ -373,6 +423,13 @@ export default function App() {
     return () => clearInterval(timer);
   }, [base, jobs, token]);
   useEffect(() => {
+    for (const item of jobs) {
+      if (item.job?.status !== "succeeded" || !item.job.result?.media_path || startedBatchVideos.current.has(item.jobId)) continue;
+      startedBatchVideos.current.add(item.jobId);
+      batchQueue.current = batchQueue.current.then(() => processBatchVideo(item, clipCount));
+    }
+  });
+  useEffect(() => {
     if (
       !singleJob ||
       ["succeeded", "failed", "cancelled", "poll_error"].includes(
@@ -428,11 +485,7 @@ export default function App() {
     })));
   }
 
-  async function prepareTranscript(mediaPath: string, sourceUrl?: string) {
-    const version = mediaVersion.current;
-    setTranscriptBusy(true);
-    setTranscriptError("");
-    try {
+  async function acquireTranscript(mediaPath: string, sourceUrl?: string): Promise<string> {
       const parent = mediaPath.slice(0, mediaPath.lastIndexOf("/"));
       const output_path = `${parent}/transcript-${crypto.randomUUID()}.vtt`;
       let transcriptPath: string | null = null;
@@ -457,6 +510,15 @@ export default function App() {
         transcriptPath = (await waitForJob(generated.job.id)).result?.transcript_path ?? null;
       }
       if (!transcriptPath) throw new Error("Engine completed without a transcript file.");
+      return transcriptPath;
+  }
+
+  async function prepareTranscript(mediaPath: string, sourceUrl?: string) {
+    const version = mediaVersion.current;
+    setTranscriptBusy(true);
+    setTranscriptError("");
+    try {
+      const transcriptPath = await acquireTranscript(mediaPath, sourceUrl);
       if (version !== mediaVersion.current) return;
       setTranscript({ name: sourceUrl ? "Source captions or local transcript" : "Local transcript", transcript_id: "", transcript_path: transcriptPath, cue_count: 0, duration_seconds: 0 });
       await proposeClips(transcriptPath, clipCount, version);
@@ -521,7 +583,7 @@ export default function App() {
       setFileBusy(false);
     }
   }
-  async function openDownloadedJob(job: Job, name: string, sourceUrl?: string) {
+  async function openDownloadedJob(job: Job, name: string, sourceUrl?: string, batchVideo?: BatchVideo, selectedResult?: RenderResult) {
     const mediaPath = job.result?.media_path;
     if (job.status !== "succeeded" || !mediaPath) return;
     setFileBusy(true);
@@ -547,18 +609,18 @@ export default function App() {
         size_bytes: null,
         metadata: probe.metadata,
       });
-      setTranscript(null);
-      setCandidates([]);
-      setClipDrafts([]);
+      setTranscript(batchVideo?.transcriptPath ? { name: "Channel captions or local transcript", transcript_id: "", transcript_path: batchVideo.transcriptPath, cue_count: 0, duration_seconds: 0 } : null);
+      setCandidates(batchVideo?.clips ?? []);
+      setClipDrafts(batchVideo?.clips ?? []);
       setSelectedCandidate(null);
       setClipStart("0");
       setClipEnd(String(Math.min(30, probe.metadata.duration_seconds ?? 30)));
-      setRenderResult(null);
+      setRenderResult(selectedResult ?? null);
       setAsset(null);
       setCloudClip(null);
       setDraft(null);
       setPage("local");
-      void prepareTranscript(mediaPath, sourceUrl ?? job.result?.url);
+      if (!batchVideo?.transcriptPath) void prepareTranscript(mediaPath, sourceUrl ?? job.result?.url);
     } catch (error) {
       setDownloadOpenError(String(error));
     } finally {
@@ -662,15 +724,16 @@ export default function App() {
     setRenderResult(null);
     setAsset(null); setCloudClip(null); setDraft(null);
   }
-  async function renderClip(clip: ClipDraft): Promise<RenderResult> {
-    if (!fileResult) throw new Error("Import a video first.");
+  async function renderClip(clip: ClipDraft, context?: { mediaPath: string; duration?: number | null; transcriptPath?: string }): Promise<RenderResult> {
+    const mediaPath = context?.mediaPath ?? fileResult?.media_path;
+    if (!mediaPath) throw new Error("Import a video first.");
     const start = Number(clip.start);
     const end = Number(clip.end);
-    const duration = fileResult.metadata?.duration_seconds;
+    const duration = context ? context.duration : fileResult?.metadata?.duration_seconds;
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start)
       throw new Error("End must be after a non-negative start.");
     if (duration != null && end > duration) throw new Error("End exceeds video duration.");
-    let subtitlePath = clip.burnSubtitles ? transcript?.transcript_path : undefined;
+    let subtitlePath = clip.burnSubtitles ? context?.transcriptPath ?? transcript?.transcript_path : undefined;
     if (clip.burnSubtitles && clip.captionText !== clip.text) {
       const edited = clip.captionText.trim();
       if (!edited) throw new Error("Enter caption text or turn off Burn subtitles.");
@@ -688,12 +751,12 @@ export default function App() {
       const imported = await request<{ transcript_path: string }>(base, token, "/v1/transcripts/import", { method: "POST", body });
       subtitlePath = imported.transcript_path;
     }
-    const parent = fileResult.media_path.slice(0, fileResult.media_path.lastIndexOf("/"));
+    const parent = mediaPath.slice(0, mediaPath.lastIndexOf("/"));
     const response = await request<{ result: RenderResult }>(base, token, "/v1/media/render-clip", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        source_path: fileResult.media_path,
+        source_path: mediaPath,
         output_path: `${parent}/clip-${crypto.randomUUID()}.mp4`,
         start_seconds: start,
         end_seconds: end,
@@ -715,6 +778,52 @@ export default function App() {
     setBatchRendering(true);
     for (const clip of clipDrafts) await renderDraft(clip);
     setBatchRendering(false);
+  }
+  function updateBatchVideo(jobId: string, patch: Partial<BatchVideo>) {
+    setBatchVideos((current) => ({ ...current, [jobId]: { ...current[jobId], ...patch } }));
+  }
+  function updateBatchClip(jobId: string, clipId: string, patch: Partial<ClipDraft>) {
+    setBatchVideos((current) => ({
+      ...current,
+      [jobId]: {
+        ...current[jobId],
+        clips: current[jobId].clips.map((clip) => clip.id === clipId ? { ...clip, ...patch } : clip),
+      },
+    }));
+  }
+  async function renderBatchClip(item: BatchJob, clip: ClipDraft, transcriptPath: string) {
+    const mediaPath = item.job?.result?.media_path;
+    if (!mediaPath) return;
+    updateBatchClip(item.jobId, clip.id, { rendering: true, error: "", result: undefined });
+    try {
+      const result = await renderClip(clip, { mediaPath, transcriptPath });
+      updateBatchClip(item.jobId, clip.id, { rendering: false, result });
+    } catch (error) {
+      updateBatchClip(item.jobId, clip.id, { rendering: false, error: String(error) });
+    }
+  }
+  async function processBatchVideo(item: BatchJob, count: number) {
+    const mediaPath = item.job?.result?.media_path;
+    if (!mediaPath) return;
+    updateBatchVideo(item.jobId, { status: "Acquiring captions or transcribing locally…", count, clips: [] });
+    try {
+      const transcriptPath = await acquireTranscript(mediaPath, item.url);
+      updateBatchVideo(item.jobId, { status: "Proposing clip ranges…", transcriptPath });
+      const found = await request<{ candidates: Candidate[] }>(base, token, "/v1/transcripts/candidates", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript_path: transcriptPath, max_candidates: count }),
+      });
+      const clips: ClipDraft[] = found.candidates.map((candidate) => ({
+        ...candidate, id: crypto.randomUUID(),
+        start: candidate.start_seconds.toFixed(2), end: candidate.end_seconds.toFixed(2),
+        captionText: candidate.text, burnSubtitles: true,
+      }));
+      updateBatchVideo(item.jobId, { status: `Rendering ${clips.length} clips locally…`, clips });
+      for (const clip of clips) await renderBatchClip(item, clip, transcriptPath);
+      updateBatchVideo(item.jobId, { status: "Local batch finished. Review each clip." });
+    } catch (error) {
+      updateBatchVideo(item.jobId, { status: "Needs attention", error: String(error) });
+    }
   }
   async function signIn() {
     setLoginBusy(true);
@@ -981,14 +1090,15 @@ export default function App() {
           videos: selected.map(({ id, url }) => ({ id, url })),
         }),
       });
-      setJobs(
-        result.jobs.map((item) => ({
+      setJobs((current) => [...current,
+        ...result.jobs.map((item) => ({
           title:
             selected.find((video) => video.id === item.video_id)?.title ??
             item.video_id,
+          url: selected.find((video) => video.id === item.video_id)?.url ?? "",
           jobId: item.job_id,
         })),
-      );
+      ]);
       setSelection({});
       setConfirming(false);
     } catch (error) {
@@ -1719,11 +1829,54 @@ export default function App() {
                 <section className="panel">
                   <span className="kicker">ENGINE JOBS</span>
                   <h2>Batch progress</h2>
+                  <p className="note">Confirmed videos automatically acquire captions or a local transcript, propose clips, then render them on this computer. Adjust the count per video and regenerate if needed.</p>
                   {jobs.map((item) => (
                     <div className="job" key={item.jobId}>
                       <strong>{item.title}</strong>
                       <span>{jobStatus(item.job)}</span>
                       {item.job?.error && <small>{item.job.error}</small>}
+                      {batchVideos[item.jobId] && <>
+                        <span>{batchVideos[item.jobId].status}</span>
+                        {batchVideos[item.jobId].error && <p role="alert" className="error">{batchVideos[item.jobId].error}</p>}
+                        <label>Clips for this video (1–12)
+                          <input type="number" min="1" max="12" value={batchVideos[item.jobId].count}
+                            onChange={(event) => updateBatchVideo(item.jobId, { count: Math.max(1, Math.min(12, Number(event.target.value) || 1)) })} />
+                        </label>
+                        {item.job?.result?.media_path && <button type="button" className="secondary"
+                          onClick={() => { batchQueue.current = batchQueue.current.then(() => processBatchVideo(item, batchVideos[item.jobId].count)); }}>
+                          Retry or regenerate this video
+                        </button>}
+                        {batchVideos[item.jobId].clips.map((clip, index) => <div className="clip-editor" key={clip.id}>
+                          <h3>Clip {index + 1} · {clip.rendering ? "Rendering…" : clip.result ? "Rendered" : clip.error ? "Needs retry" : "Queued"}</h3>
+                          <label>Caption text<textarea rows={3} value={clip.captionText}
+                            onChange={(event) => updateBatchClip(item.jobId, clip.id, { captionText: event.target.value, result: undefined })} /></label>
+                          <div className="form-row">
+                            <label>Start (seconds)<input type="number" min="0" step="0.01" value={clip.start}
+                              onChange={(event) => updateBatchClip(item.jobId, clip.id, { start: event.target.value, result: undefined })} /></label>
+                            <label>End (seconds)<input type="number" min="0" step="0.01" value={clip.end}
+                              onChange={(event) => updateBatchClip(item.jobId, clip.id, { end: event.target.value, result: undefined })} /></label>
+                          </div>
+                          <label className="checkbox"><input type="checkbox" checked={clip.burnSubtitles}
+                            onChange={(event) => updateBatchClip(item.jobId, clip.id, { burnSubtitles: event.target.checked, result: undefined })} /> Burn subtitles</label>
+                          {clip.captionText !== clip.text && <p className="note">Edited caption text uses one cue across this clip.</p>}
+                          {clip.error && <p role="alert" className="error">{clip.error}</p>}
+                          <button type="button" className="secondary" disabled={clip.rendering || !batchVideos[item.jobId].transcriptPath}
+                            onClick={() => void renderBatchClip(item, clip, batchVideos[item.jobId].transcriptPath!)}>
+                            {clip.result ? "Retry render" : "Render clip"}</button>
+                          {clip.result && <>
+                            <span>Local render: {clip.result.duration_seconds.toFixed(1)} seconds</span>
+                            {clip.result.media_id && <button type="button" className="secondary"
+                              onClick={() => { setBatchPreviewUrl(null); setBatchPreviewError(""); setBatchPreview({ jobId: item.jobId, clipId: clip.id, mediaId: clip.result!.media_id! }); }}>Preview clip</button>}
+                            <button type="button" className="secondary" disabled={fileBusy}
+                              onClick={() => void openDownloadedJob(item.job!, item.title, item.url, batchVideos[item.jobId], clip.result)}>
+                              Open for explicit cloud handoff</button>
+                          </>}
+                          {batchPreview?.jobId === item.jobId && batchPreview.clipId === clip.id && <>
+                            {batchPreviewUrl ? <video controls src={batchPreviewUrl} className="clip-preview" aria-label={`${item.title} clip ${index + 1} preview`} /> : <span>Loading preview…</span>}
+                            {batchPreviewError && <p role="alert" className="error">{batchPreviewError}</p>}
+                          </>}
+                        </div>)}
+                      </>}
                       {item.job?.status === "succeeded" &&
                       item.job.result?.media_path ? (
                         <button
@@ -1731,7 +1884,7 @@ export default function App() {
                           className="primary"
                           disabled={fileBusy}
                           onClick={() =>
-                            void openDownloadedJob(item.job!, item.title)
+                            void openDownloadedJob(item.job!, item.title, item.url, batchVideos[item.jobId])
                           }
                         >
                           Open in clip workspace
@@ -1764,6 +1917,10 @@ export default function App() {
             <p>
               Engine will download only these titles into its local workspace.
             </p>
+            <label>Default clips per video (1–12)
+              <input type="number" min="1" max="12" value={clipCount}
+                onChange={(event) => setClipCount(Math.max(1, Math.min(12, Number(event.target.value) || 1)))} />
+            </label>
             <ul>
               {selected.map((video) => (
                 <li key={video.id}>{video.title}</li>
