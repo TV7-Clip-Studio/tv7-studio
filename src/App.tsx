@@ -18,7 +18,7 @@ type Job = {
   status: string;
   progress?: number;
   error?: string;
-  result?: Record<string, unknown>;
+  result?: { media_path?: string | null; url?: string; metadata?: unknown };
 };
 type BatchJob = { title: string; jobId: string; job?: Job };
 type Diagnostics = {
@@ -182,7 +182,7 @@ export default function App() {
     name: string;
     media_id: string;
     media_path: string;
-    size_bytes: number;
+    size_bytes: number | null;
     metadata?: MediaMetadata;
     probeError?: string;
   } | null>(null);
@@ -199,6 +199,8 @@ export default function App() {
   const [renderBusy, setRenderBusy] = useState(false);
   const [renderError, setRenderError] = useState("");
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
   const [accountPassword, setAccountPassword] = useState("");
   const [accessToken, setAccessToken] = useState("");
@@ -220,6 +222,7 @@ export default function App() {
   const [singleUrl, setSingleUrl] = useState("");
   const [singleBusy, setSingleBusy] = useState(false);
   const [singleError, setSingleError] = useState("");
+  const [downloadOpenError, setDownloadOpenError] = useState("");
   const [singleJob, setSingleJob] = useState<Job | null>(null);
   const [channelUrl, setChannelUrl] = useState("");
   const [discovery, setDiscovery] = useState<Discovery | null>(null);
@@ -231,6 +234,37 @@ export default function App() {
   const [batchError, setBatchError] = useState("");
   const [jobs, setJobs] = useState<BatchJob[]>([]);
   const selected = Object.values(selection);
+
+  useEffect(() => {
+    if (!renderResult?.media_id || !base) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    void fetch(
+      `${base}/v1/media/assets/${encodeURIComponent(renderResult.media_id)}`,
+      { headers },
+    )
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error(`Preview unavailable: HTTP ${response.status}`);
+        const blob = await response.blob();
+        if (!blob.type.startsWith("video/"))
+          throw new Error("Engine did not return video for preview.");
+        if (!cancelled) {
+          objectUrl = URL.createObjectURL(blob);
+          setPreviewUrl(objectUrl);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setPreviewError(String(error));
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setPreviewUrl(null);
+    };
+  }, [base, renderResult?.media_id, token]);
 
   const refresh = useCallback(async () => {
     if (!base) return;
@@ -360,6 +394,8 @@ export default function App() {
           },
         );
         setFileResult({ name: file.name, ...result, metadata: probe.metadata });
+        setClipStart("0");
+        setClipEnd(String(Math.min(30, probe.metadata.duration_seconds ?? 30)));
       } catch (error) {
         setFileResult({
           name: file.name,
@@ -373,6 +409,45 @@ export default function App() {
       setFileBusy(false);
     }
   }
+  async function openDownloadedJob(job: Job, name: string) {
+    const mediaPath = job.result?.media_path;
+    if (job.status !== "succeeded" || !mediaPath) return;
+    setFileBusy(true);
+    setDownloadOpenError("");
+    try {
+      const probe = await request<{ metadata: MediaMetadata }>(
+        base,
+        token,
+        "/v1/media/probe",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: mediaPath }),
+        },
+      );
+      setFileResult({
+        name,
+        media_id: job.id,
+        media_path: mediaPath,
+        size_bytes: null,
+        metadata: probe.metadata,
+      });
+      setTranscript(null);
+      setCandidates([]);
+      setSelectedCandidate(null);
+      setClipStart("0");
+      setClipEnd(String(Math.min(30, probe.metadata.duration_seconds ?? 30)));
+      setRenderResult(null);
+      setAsset(null);
+      setCloudClip(null);
+      setDraft(null);
+      setPage("local");
+    } catch (error) {
+      setDownloadOpenError(String(error));
+    } finally {
+      setFileBusy(false);
+    }
+  }
   async function importTranscript(file: File) {
     setTranscriptBusy(true);
     setTranscriptError("");
@@ -380,6 +455,8 @@ export default function App() {
     setCandidates([]);
     setSelectedCandidate(null);
     setRenderResult(null);
+    setPreviewUrl(null);
+    setPreviewError("");
     try {
       if (!file.name.toLowerCase().endsWith(".vtt"))
         throw new Error("Select a WebVTT (.vtt) transcript.");
@@ -423,7 +500,7 @@ export default function App() {
     setDraft(null);
   }
   async function renderCandidate() {
-    if (!fileResult || !transcript || selectedCandidate === null) return;
+    if (!fileResult) return;
     setRenderBusy(true);
     setRenderError("");
     setRenderResult(null);
@@ -460,7 +537,9 @@ export default function App() {
             output_path,
             start_seconds: start,
             end_seconds: end,
-            subtitle_path: transcript.transcript_path,
+            ...(transcript
+              ? { subtitle_path: transcript.transcript_path }
+              : {}),
           }),
         },
       );
@@ -468,7 +547,10 @@ export default function App() {
         ...response.result,
         start_seconds: start,
         end_seconds: end,
-        caption_text: candidates[selectedCandidate]?.text ?? "",
+        caption_text:
+          selectedCandidate === null
+            ? ""
+            : (candidates[selectedCandidate]?.text ?? ""),
       });
     } catch (error) {
       setRenderError(String(error));
@@ -895,7 +977,9 @@ export default function App() {
                 {fileResult && (
                   <div role="status" className="result">
                     <strong>{fileResult.name} is ready in Engine</strong>
-                    <span>{formatSize(fileResult.size_bytes)}</span>
+                    {fileResult.size_bytes != null && (
+                      <span>{formatSize(fileResult.size_bytes)}</span>
+                    )}
                     {fileResult.metadata && (
                       <span>
                         {fileResult.metadata.format} ·{" "}
@@ -919,10 +1003,9 @@ export default function App() {
                 <span className="kicker">TRANSCRIPT / CLIP</span>
                 <h2>Find a clip from captions</h2>
                 <p className="note">
-                  Add a WebVTT transcript for this video. Engine finds bounded
-                  timestamp ranges; review and adjust one range before rendering
-                  a captioned clip. These are timing candidates, not quality
-                  scores.
+                  Set start and end times to render a clip. Optionally add a
+                  WebVTT transcript for timing candidates and burned-in
+                  captions. Candidates are timing ranges, not quality scores.
                 </p>
                 <label htmlFor="transcript-file">WebVTT transcript</label>
                 <input
@@ -976,9 +1059,13 @@ export default function App() {
                     ))}
                   </div>
                 )}
-                {selectedCandidate !== null && (
+                {fileResult && (
                   <div className="clip-editor">
-                    <h3>Review clip timing</h3>
+                    <h3>
+                      {selectedCandidate === null
+                        ? "Set clip timing"
+                        : "Review clip timing"}
+                    </h3>
                     <div className="form-row">
                       <label htmlFor="clip-start">
                         Start (seconds)
@@ -1009,9 +1096,7 @@ export default function App() {
                       disabled={!ready || renderBusy || !fileResult}
                       onClick={() => void renderCandidate()}
                     >
-                      {renderBusy
-                        ? "Rendering captioned clip…"
-                        : "Render captioned clip"}
+                      {renderBusy ? "Rendering clip…" : "Render clip"}
                     </button>
                   </div>
                 )}
@@ -1022,7 +1107,7 @@ export default function App() {
                 )}
                 {renderResult && (
                   <div className="result" role="status">
-                    <strong>Captioned clip rendered</strong>
+                    <strong>Clip rendered</strong>
                     <span>
                       {renderResult.duration_seconds.toFixed(1)} seconds · saved
                       in Engine workspace
@@ -1031,6 +1116,15 @@ export default function App() {
                       <summary>Technical details</summary>
                       <code>{renderResult.output_path}</code>
                     </details>
+                    {previewUrl && (
+                      <video
+                        controls
+                        src={previewUrl}
+                        aria-label="Rendered clip preview"
+                        className="clip-preview"
+                      />
+                    )}
+                    {previewError && <span>{previewError}</span>}
                   </div>
                 )}
               </section>
@@ -1273,22 +1367,43 @@ export default function App() {
                     {singleError}
                   </p>
                 )}
+                {downloadOpenError && (
+                  <p className="error" role="alert">
+                    {downloadOpenError}
+                  </p>
+                )}
                 {singleJob && (
                   <div className="job" role="status">
                     <strong>Video import</strong>
                     <span>{jobStatus(singleJob)}</span>
-                    <small>
-                      {singleJob.error ??
-                        (singleJob.result
-                          ? JSON.stringify(singleJob.result)
-                          : singleJob.id)}
-                    </small>
+                    {singleJob.error && <small>{singleJob.error}</small>}
+                    {singleJob.status === "succeeded" &&
+                    singleJob.result?.media_path ? (
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={fileBusy}
+                        onClick={() =>
+                          void openDownloadedJob(
+                            singleJob,
+                            singleJob.result?.media_path?.split("/").pop() ??
+                              "Downloaded video",
+                          )
+                        }
+                      >
+                        Open in clip workspace
+                      </button>
+                    ) : singleJob.status === "succeeded" ? (
+                      <small>
+                        Download completed without a usable media file.
+                      </small>
+                    ) : null}
                   </div>
                 )}
               </section>
               <p className="note">
-                Studio currently offers timing edits for one candidate clip. A full
-                timeline editor and publishing are later integrations.
+                Studio currently offers timing edits for one candidate clip. A
+                full timeline editor and publishing are later integrations.
               </p>
             </>
           )}
@@ -1402,6 +1517,11 @@ export default function App() {
                   {batchError}
                 </p>
               )}
+              {downloadOpenError && (
+                <p role="alert" className="error">
+                  {downloadOpenError}
+                </p>
+              )}
               {jobs.length > 0 && (
                 <section className="panel">
                   <span className="kicker">ENGINE JOBS</span>
@@ -1410,12 +1530,24 @@ export default function App() {
                     <div className="job" key={item.jobId}>
                       <strong>{item.title}</strong>
                       <span>{jobStatus(item.job)}</span>
-                      <small>
-                        {item.job?.error ??
-                          (item.job?.result
-                            ? JSON.stringify(item.job.result)
-                            : item.jobId)}
-                      </small>
+                      {item.job?.error && <small>{item.job.error}</small>}
+                      {item.job?.status === "succeeded" &&
+                      item.job.result?.media_path ? (
+                        <button
+                          type="button"
+                          className="primary"
+                          disabled={fileBusy}
+                          onClick={() =>
+                            void openDownloadedJob(item.job!, item.title)
+                          }
+                        >
+                          Open in clip workspace
+                        </button>
+                      ) : item.job?.status === "succeeded" ? (
+                        <small>
+                          Download completed without a usable media file.
+                        </small>
+                      ) : null}
                     </div>
                   ))}
                 </section>

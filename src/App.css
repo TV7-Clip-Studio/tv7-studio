@@ -395,6 +395,12 @@ form label {
 .clip-editor button {
   justify-self: start;
 }
+.clip-preview {
+  width: min(100%, 640px);
+  max-height: 420px;
+  background: #000;
+  border-radius: 8px;
+}
 .count {
   font-size: 13px;
   color: #c8ec71;
