@@ -27,6 +27,10 @@ type BatchVideo = {
   transcriptPath?: string;
   clips: ClipDraft[];
   error?: string;
+  aiSuggestions?: AiSuggestion[];
+  aiError?: string;
+  aiUsage?: AiResult["usage"];
+  aiModel?: string;
 };
 type Diagnostics = {
   status?: string;
@@ -53,14 +57,18 @@ type Candidate = {
 };
 type ClipDraft = Candidate & {
   id: string;
+  proposalSource?: "local_timing" | "ai";
   start: string;
   end: string;
   captionText: string;
   burnSubtitles: boolean;
+  format?: "source" | "vertical_9_16" | "vertical_9_16_crop";
   result?: RenderResult;
   error?: string;
   rendering?: boolean;
 };
+type AiSuggestion = { title: string; start_seconds: number; end_seconds: number; reason: string; score: number };
+type AiResult = { provider: string; model: string; clips: AiSuggestion[]; usage?: { credits_charged?: number; credits_remaining?: number } };
 type RenderResult = {
   output_path: string;
   duration_seconds: number;
@@ -87,9 +95,12 @@ type YouTubeConnection = {
   channel_title: string | null;
 };
 type LicenseReadiness = {
+  account_active?: boolean;
   license_status: string;
   cloud_ai_available: boolean;
   cloud_ai_credits_remaining: number;
+  can_request_engine_cloud_ai_token?: boolean;
+  reason_code?: string;
 };
 type ScheduleDraft = {
   id: number;
@@ -259,6 +270,13 @@ export default function App() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [clipCount, setClipCount] = useState(5);
   const [clipDrafts, setClipDrafts] = useState<ClipDraft[]>([]);
+  const [localAiSuggestions, setLocalAiSuggestions] = useState<AiSuggestion[]>([]);
+  const [localAiError, setLocalAiError] = useState("");
+  const [aiConsent, setAiConsent] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiUsage, setAiUsage] = useState<AiResult["usage"]>();
+  const [localAiModel, setLocalAiModel] = useState("");
+  const [aiCueEstimates, setAiCueEstimates] = useState<Record<string, { count: number; error?: string }>>({});
   const [batchRendering, setBatchRendering] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(
     null,
@@ -556,6 +574,8 @@ export default function App() {
       end: candidate.end_seconds.toFixed(2),
       captionText: candidate.text,
       burnSubtitles: true,
+      format: "source",
+      proposalSource: "local_timing",
     })));
   }
 
@@ -613,6 +633,10 @@ export default function App() {
     setTranscript(null);
     setCandidates([]);
     setClipDrafts([]);
+    setLocalAiSuggestions([]);
+    setLocalAiModel("");
+    setLocalAiError("");
+    setAiConsent(false);
     setSelectedCandidate(null);
     setRenderResult(null);
     setAsset(null);
@@ -686,6 +710,10 @@ export default function App() {
       setTranscript(batchVideo?.transcriptPath ? { name: "Channel captions or local transcript", transcript_id: "", transcript_path: batchVideo.transcriptPath, cue_count: 0, duration_seconds: 0 } : null);
       setCandidates(batchVideo?.clips ?? []);
       setClipDrafts(batchVideo?.clips ?? []);
+      setLocalAiSuggestions(batchVideo?.aiSuggestions ?? []);
+      setLocalAiModel(batchVideo?.aiModel ?? "");
+      setLocalAiError(batchVideo?.aiError ?? "");
+      setAiConsent(false);
       setSelectedCandidate(null);
       setClipStart("0");
       setClipEnd(String(Math.min(30, probe.metadata.duration_seconds ?? 30)));
@@ -708,6 +736,10 @@ export default function App() {
     setTranscript(null);
     setCandidates([]);
     setClipDrafts([]);
+    setLocalAiSuggestions([]);
+    setLocalAiModel("");
+    setLocalAiError("");
+    setAiConsent(false);
     setSelectedCandidate(null);
     setRenderResult(null);
     setPreviewUrl(null);
@@ -834,6 +866,7 @@ export default function App() {
         output_path: `${parent}/clip-${crypto.randomUUID()}.mp4`,
         start_seconds: start,
         end_seconds: end,
+        format: clip.format ?? "source",
         ...(subtitlePath ? { subtitle_path: subtitlePath } : {}),
       }),
     });
@@ -891,6 +924,8 @@ export default function App() {
         ...candidate, id: crypto.randomUUID(),
         start: candidate.start_seconds.toFixed(2), end: candidate.end_seconds.toFixed(2),
         captionText: candidate.text, burnSubtitles: true,
+        format: "source",
+        proposalSource: "local_timing",
       }));
       updateBatchVideo(item.jobId, { status: `Rendering ${clips.length} clips locally…`, clips });
       for (const clip of clips) await renderBatchClip(item, clip, transcriptPath);
@@ -898,6 +933,88 @@ export default function App() {
     } catch (error) {
       updateBatchVideo(item.jobId, { status: "Needs attention", error: String(error) });
     }
+  }
+  async function rankTranscript(path: string, count: number): Promise<AiResult> {
+    if (!aiConsent) throw new Error("Confirm cloud transcript sharing first.");
+    if (!accessToken) throw new Error("Sign in to use TV7 cloud AI.");
+    const readiness = await backendRequest<LicenseReadiness>("/api/v1/auth/license", accessToken);
+    setLicense(readiness);
+    if (!readiness.can_request_engine_cloud_ai_token || !readiness.cloud_ai_available)
+      throw new Error(`Cloud AI is unavailable: ${readiness.reason_code ?? readiness.license_status}. Local timing candidates remain available.`);
+    const cues = await request<{ cues: { start_seconds: number; end_seconds: number; text: string }[] }>(
+      base, token, `/v1/transcripts/cues?path=${encodeURIComponent(path)}`,
+    );
+    if (!cues.cues.length) throw new Error("The transcript has no timed cues for AI review.");
+    let delegated = false;
+    try {
+      const cloudToken = await backendRequest<{ token: string; token_type: string; scope: string; expires_in_seconds: number; credits_remaining: number }>(
+        "/api/v1/cloud-ai/engine-token", accessToken, { method: "POST" },
+      );
+      delegated = true;
+      await request(base, token, "/v1/ai/cloud-token", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cloudToken),
+      });
+      const result = await request<AiResult>(base, token, "/v1/ai/transcript-intelligence", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript: cues.cues, clip_duration: "medium", timeline_target: "entire_video", max_suggestions: Math.max(1, Math.min(12, count)) }),
+      });
+      setAiUsage(result.usage);
+      if (result.usage?.credits_remaining != null)
+        setLicense((current) => current ? { ...current, cloud_ai_credits_remaining: result.usage!.credits_remaining! } : current);
+      return result;
+    } finally {
+      if (delegated) await request(base, token, "/v1/ai/cloud-token", { method: "DELETE" }).catch(() => {});
+    }
+  }
+  async function estimateAiCalls(path: string) {
+    try {
+      const result = await request<{ cues: { start_seconds: number; end_seconds: number; text: string }[] }>(base, token, `/v1/transcripts/cues?path=${encodeURIComponent(path)}`);
+      setAiCueEstimates((current) => ({ ...current, [path]: { count: result.cues.length } }));
+    } catch (error) {
+      setAiCueEstimates((current) => ({ ...current, [path]: { count: 0, error: String(error) } }));
+    }
+  }
+  async function rankLocalTranscript() {
+    if (!transcript || aiBusy) return;
+    setAiBusy(true); setLocalAiError("");
+    try { const result = await rankTranscript(transcript.transcript_path, clipCount); setLocalAiSuggestions(result.clips); setLocalAiModel(`${result.provider} · ${result.model}`); }
+    catch (error) { setLocalAiError(String(error)); }
+    finally { setAiBusy(false); setAiConsent(false); }
+  }
+  async function rankBatchTranscript(jobId: string) {
+    const video = batchVideos[jobId];
+    if (!video?.transcriptPath || aiBusy) return;
+    setAiBusy(true); updateBatchVideo(jobId, { aiError: "" });
+    try {
+      const result = await rankTranscript(video.transcriptPath, video.count);
+      updateBatchVideo(jobId, { aiSuggestions: result.clips, aiUsage: result.usage, aiModel: `${result.provider} · ${result.model}` });
+    } catch (error) { updateBatchVideo(jobId, { aiError: String(error) }); }
+    finally { setAiBusy(false); setAiConsent(false); }
+  }
+  function draftFromSuggestion(suggestion: AiSuggestion): ClipDraft {
+    return { id: crypto.randomUUID(), proposalSource: "ai", start_seconds: suggestion.start_seconds, end_seconds: suggestion.end_seconds,
+      start: suggestion.start_seconds.toFixed(2), end: suggestion.end_seconds.toFixed(2),
+      text: "", captionText: "", cue_count: 0,
+      burnSubtitles: true, format: "source" };
+  }
+  function addLocalSuggestion(suggestion: AiSuggestion) {
+    if (!Number.isFinite(suggestion.start_seconds) || !Number.isFinite(suggestion.end_seconds) || suggestion.start_seconds < 0 || suggestion.end_seconds <= suggestion.start_seconds) return;
+    setClipDrafts((current) => current.length < 12 ? [...current, draftFromSuggestion(suggestion)] : current);
+  }
+  function replaceLocalWithSuggestion(suggestion: AiSuggestion) {
+    if (!Number.isFinite(suggestion.start_seconds) || !Number.isFinite(suggestion.end_seconds) || suggestion.start_seconds < 0 || suggestion.end_seconds <= suggestion.start_seconds) return;
+    setClipDrafts([draftFromSuggestion(suggestion)]);
+  }
+  function addBatchSuggestion(jobId: string, suggestion: AiSuggestion) {
+    if (!Number.isFinite(suggestion.start_seconds) || !Number.isFinite(suggestion.end_seconds) || suggestion.start_seconds < 0 || suggestion.end_seconds <= suggestion.start_seconds) return;
+    setBatchVideos((current) => {
+      const video = current[jobId];
+      return video && video.clips.length < 12 ? { ...current, [jobId]: { ...video, clips: [...video.clips, draftFromSuggestion(suggestion)] } } : current;
+    });
+  }
+  function replaceBatchWithSuggestion(jobId: string, suggestion: AiSuggestion) {
+    if (!Number.isFinite(suggestion.start_seconds) || !Number.isFinite(suggestion.end_seconds) || suggestion.start_seconds < 0 || suggestion.end_seconds <= suggestion.start_seconds) return;
+    setBatchVideos((current) => current[jobId] ? { ...current, [jobId]: { ...current[jobId], clips: [draftFromSuggestion(suggestion)] } } : current);
   }
   async function signIn() {
     setLoginBusy(true);
@@ -947,7 +1064,13 @@ export default function App() {
       setLoginBusy(false);
     }
   }
+  async function refreshAiReadiness() {
+    if (!accessToken) return;
+    try { setLicense(await backendRequest<LicenseReadiness>("/api/v1/auth/license", accessToken)); }
+    catch (error) { setLocalAiError(String(error)); }
+  }
   function signOut() {
+    if (base) void request(base, token, "/v1/ai/cloud-token", { method: "DELETE" }).catch(() => {});
     setAccessToken("");
     setSignedInEmail("");
     setYoutubeConnection(null);
@@ -1499,6 +1622,35 @@ export default function App() {
                   onClick={() => void proposeClips(transcript.transcript_path, clipCount, mediaVersion.current).catch((error: unknown) => setTranscriptError(String(error)))}>
                   Refresh proposals
                 </button>}
+                {transcript && <div className="clip-editor">
+                  <h3>Optional AI clip suggestions</h3>
+                  <p className="note">With your consent, timed transcript text leaves this device through Engine and TV7 Backend for DeepSeek analysis. Video pixels stay local. Backend credits may be charged per provider call; long transcripts may need several calls. Scores are review suggestions, not view predictions or viral guarantees. Local timing candidates stay available.</p>
+                  <button type="button" className="secondary" onClick={() => void estimateAiCalls(transcript.transcript_path)}>Estimate cloud AI calls</button>
+                  {aiCueEstimates[transcript.transcript_path]?.count > 0 && <p className="note">{aiCueEstimates[transcript.transcript_path].count} timed cues · at least {Math.ceil(aiCueEstimates[transcript.transcript_path].count / 400)} provider call(s). The 24,000-character cap can increase that count and credit use.</p>}
+                  {aiCueEstimates[transcript.transcript_path]?.error && <p role="alert" className="error">{aiCueEstimates[transcript.transcript_path].error}</p>}
+                  <label className="checkbox"><input type="checkbox" checked={aiConsent}
+                    onChange={(event) => setAiConsent(event.target.checked)} /> I agree to send this transcript to TV7 cloud AI for this request</label>
+                  {!accessToken && <form onSubmit={(event) => { event.preventDefault(); void signIn(); }}>
+                    <label>TV7 account email<input type="email" required value={accountEmail} onChange={(event) => setAccountEmail(event.target.value)} /></label>
+                    <label>Password<input type="password" required value={accountPassword} onChange={(event) => setAccountPassword(event.target.value)} /></label>
+                    <button className="secondary" disabled={loginBusy}>{loginBusy ? "Signing in…" : "Sign in for optional AI"}</button>
+                  </form>}
+                  {accessToken && <p className="note">Cloud AI: {license?.reason_code ?? "checking readiness"} · credits remaining: {license?.cloud_ai_credits_remaining ?? "unknown"}</p>}
+                  {accessToken && license?.cloud_ai_available === false && <p className="note">TV7 cloud AI is unavailable for this account ({license.reason_code ?? "not ready"}). Local timing candidates and rendering still work.</p>}
+                  {accessToken && <button type="button" className="secondary" onClick={() => void refreshAiReadiness()}>Refresh AI readiness</button>}
+                  <button type="button" className="secondary" disabled={!aiConsent || !accessToken || aiBusy || license?.cloud_ai_available === false}
+                    onClick={() => void rankLocalTranscript()}>{aiBusy ? "Requesting suggestions…" : "Request AI suggestions"}</button>
+                  {localAiError && <p role="alert" className="error">{localAiError}</p>}
+                  {localAiModel && <p className="note">Suggestions from {localAiModel}.</p>}
+                  {localAiSuggestions.length > 0 && <p className="note">Add a suggestion to keep current drafts, or replace the visible draft cards. Existing saved Backend drafts are unaffected.</p>}
+                  {aiUsage?.credits_charged != null && <p className="note">Last AI request charged {aiUsage.credits_charged} credit(s); {aiUsage.credits_remaining ?? "unknown"} remain.</p>}
+                  {localAiSuggestions.map((suggestion, index) => <div className="candidate-row" key={`${suggestion.start_seconds}-${index}`}>
+                    <strong>{suggestion.title} · {suggestion.start_seconds.toFixed(1)}–{suggestion.end_seconds.toFixed(1)} s</strong>
+                    <span>{suggestion.reason}</span><small>AI suggestion score: {suggestion.score.toFixed(2)}</small>
+                    <button type="button" className="secondary" disabled={clipDrafts.length >= 12} onClick={() => addLocalSuggestion(suggestion)}>Add alongside local drafts</button>
+                    <button type="button" className="secondary" onClick={() => replaceLocalWithSuggestion(suggestion)}>Replace visible drafts with this</button>
+                  </div>)}
+                </div>}
                 {transcript && candidates.length === 0 && (
                   <p className="note">
                     No candidate ranges found in this transcript.
@@ -1509,7 +1661,8 @@ export default function App() {
                     onClick={() => void renderBatch()}>{batchRendering ? "Rendering batch…" : `Render ${clipDrafts.length} clips locally`}</button>
                   <div className="video-list" aria-label="Clip drafts">
                     {clipDrafts.map((clip, index) => <div className="clip-editor" key={clip.id}>
-                      <h3>Clip {index + 1}</h3>
+                      <h3>Clip {index + 1}{clip.proposalSource === "ai" ? " · AI suggested range" : " · local timing range"}</h3>
+                      {clip.proposalSource === "ai" && <p className="note">Caption text is blank because this AI range may cross several transcript cues. Burn subtitles uses the original timed VTT across the full selected range. Add caption text only if you want to replace those cues with one line.</p>}
                       <label>Caption text
                         <textarea value={clip.captionText} rows={3}
                           onChange={(event) => updateClip(clip.id, { captionText: event.target.value, result: undefined })} />
@@ -1533,6 +1686,13 @@ export default function App() {
                       </div>
                       <label className="checkbox"><input type="checkbox" checked={clip.burnSubtitles}
                         onChange={(event) => updateClip(clip.id, { burnSubtitles: event.target.checked, result: undefined })} /> Burn subtitles</label>
+                      <label>Video format<select value={clip.format ?? "source"}
+                        onChange={(event) => updateClip(clip.id, { format: event.target.value as ClipDraft["format"], result: undefined })}>
+                        <option value="source">Original source framing</option>
+                        <option value="vertical_9_16">Vertical 9:16 with fit and black padding</option>
+                        <option value="vertical_9_16_crop">Vertical 9:16 center crop</option>
+                      </select></label>
+                      {clip.format === "vertical_9_16_crop" && <p className="note">Center crop removes left and right content. Render and preview this clip before any cloud handoff.</p>}
                       <button type="button" className="secondary" disabled={clip.rendering || batchRendering || !ready}
                         onClick={() => void renderDraft(clip)}>{clip.rendering ? "Rendering…" : clip.result ? "Retry render" : "Render clip"}</button>
                       {clip.error && <p role="alert" className="error">{clip.error}</p>}
@@ -2010,6 +2170,12 @@ export default function App() {
                   <span className="kicker">ENGINE JOBS</span>
                   <h2>Batch progress</h2>
                   <p className="note">Confirmed videos automatically acquire captions or a local transcript, propose clips, then render them on this computer. Adjust the count per video and regenerate if needed.</p>
+                  <p className="note">Optional DeepSeek suggestions send a selected video’s timed transcript text through Engine to TV7 Backend. Video pixels stay local. Backend credits may be charged per provider call; long transcripts may take several calls. Scores help review clips; they do not predict views. Local timing drafts remain available.</p>
+                  <label className="checkbox"><input type="checkbox" checked={aiConsent}
+                    onChange={(event) => setAiConsent(event.target.checked)} /> I agree to send a selected transcript to TV7 cloud AI when I request suggestions</label>
+                  {accessToken && <p className="note">Cloud AI: {license?.reason_code ?? "checking readiness"} · credits remaining: {license?.cloud_ai_credits_remaining ?? "unknown"}</p>}
+                  {accessToken && license?.cloud_ai_available === false && <p className="note">TV7 cloud AI is unavailable for this account ({license.reason_code ?? "not ready"}). Local timing drafts remain available.</p>}
+                  {accessToken && <button type="button" className="secondary" onClick={() => void refreshAiReadiness()}>Refresh AI readiness</button>}
                   {jobs.map((item) => (
                     <div className="job" key={item.jobId}>
                       <strong>{item.title}</strong>
@@ -2018,6 +2184,24 @@ export default function App() {
                       {batchVideos[item.jobId] && <>
                         <span>{batchVideos[item.jobId].status}</span>
                         {batchVideos[item.jobId].error && <p role="alert" className="error">{batchVideos[item.jobId].error}</p>}
+                        {batchVideos[item.jobId].transcriptPath && <>
+                          <button type="button" className="secondary" onClick={() => void estimateAiCalls(batchVideos[item.jobId].transcriptPath!)}>Estimate cloud AI calls</button>
+                          {aiCueEstimates[batchVideos[item.jobId].transcriptPath!]?.count > 0 && <p className="note">{aiCueEstimates[batchVideos[item.jobId].transcriptPath!].count} timed cues · at least {Math.ceil(aiCueEstimates[batchVideos[item.jobId].transcriptPath!].count / 400)} provider call(s). The 24,000-character cap can increase the count and credit use.</p>}
+                          {aiCueEstimates[batchVideos[item.jobId].transcriptPath!]?.error && <p role="alert" className="error">{aiCueEstimates[batchVideos[item.jobId].transcriptPath!].error}</p>}
+                          <button type="button" className="secondary" disabled={!aiConsent || !accessToken || aiBusy || license?.cloud_ai_available === false}
+                            onClick={() => void rankBatchTranscript(item.jobId)}>{aiBusy ? "Requesting AI suggestions…" : "Request AI suggestions for this video"}</button>
+                          {batchVideos[item.jobId].aiError && <p role="alert" className="error">{batchVideos[item.jobId].aiError}</p>}
+                          {batchVideos[item.jobId].aiModel && <p className="note">Suggestions from {batchVideos[item.jobId].aiModel}.</p>}
+                          {(batchVideos[item.jobId].aiSuggestions?.length ?? 0) > 0 && <p className="note">Add a suggestion to keep current drafts, or replace this video’s visible draft cards. Existing saved Backend drafts are unaffected.</p>}
+                          {batchVideos[item.jobId].aiUsage?.credits_charged != null && <p className="note">AI request charged {batchVideos[item.jobId].aiUsage?.credits_charged} credit(s); {batchVideos[item.jobId].aiUsage?.credits_remaining ?? "unknown"} remain.</p>}
+                          {batchVideos[item.jobId].aiSuggestions?.map((suggestion, index) => <div className="candidate-row" key={`${item.jobId}-ai-${index}`}>
+                            <strong>{suggestion.title} · {suggestion.start_seconds.toFixed(1)}–{suggestion.end_seconds.toFixed(1)} s</strong>
+                            <span>{suggestion.reason}</span><small>AI suggestion score: {suggestion.score.toFixed(2)}</small>
+                            <button type="button" className="secondary" disabled={batchVideos[item.jobId].clips.length >= 12}
+                              onClick={() => addBatchSuggestion(item.jobId, suggestion)}>Add alongside local drafts</button>
+                            <button type="button" className="secondary" onClick={() => replaceBatchWithSuggestion(item.jobId, suggestion)}>Replace visible drafts with this</button>
+                          </div>)}
+                        </>}
                         <label>Clips for this video (1–12)
                           <input type="number" min="1" max="12" value={batchVideos[item.jobId].count}
                             onChange={(event) => updateBatchVideo(item.jobId, { count: Math.max(1, Math.min(12, Number(event.target.value) || 1)) })} />
@@ -2027,7 +2211,8 @@ export default function App() {
                           Retry or regenerate this video
                         </button>}
                         {batchVideos[item.jobId].clips.map((clip, index) => <div className="clip-editor" key={clip.id}>
-                          <h3>Clip {index + 1} · {clip.rendering ? "Rendering…" : clip.result ? "Rendered" : clip.error ? "Needs retry" : "Queued"}</h3>
+                          <h3>Clip {index + 1} · {clip.proposalSource === "ai" ? "AI suggested range" : "local timing range"} · {clip.rendering ? "Rendering…" : clip.result ? "Rendered" : clip.error ? "Needs retry" : "Queued"}</h3>
+                          {clip.proposalSource === "ai" && <p className="note">Caption text is blank for this range. Burn subtitles uses the original timed VTT across it; adding text replaces those cues with one line.</p>}
                           <label>Caption text<textarea rows={3} value={clip.captionText}
                             onChange={(event) => updateBatchClip(item.jobId, clip.id, { captionText: event.target.value, result: undefined })} /></label>
                           <div className="form-row">
@@ -2038,6 +2223,13 @@ export default function App() {
                           </div>
                           <label className="checkbox"><input type="checkbox" checked={clip.burnSubtitles}
                             onChange={(event) => updateBatchClip(item.jobId, clip.id, { burnSubtitles: event.target.checked, result: undefined })} /> Burn subtitles</label>
+                          <label>Video format<select value={clip.format ?? "source"}
+                            onChange={(event) => updateBatchClip(item.jobId, clip.id, { format: event.target.value as ClipDraft["format"], result: undefined })}>
+                            <option value="source">Original source framing</option>
+                            <option value="vertical_9_16">Vertical 9:16 with fit and black padding</option>
+                            <option value="vertical_9_16_crop">Vertical 9:16 center crop</option>
+                          </select></label>
+                          {clip.format === "vertical_9_16_crop" && <p className="note">Center crop removes left and right content. Render and preview this clip before any cloud handoff.</p>}
                           {clip.captionText !== clip.text && <p className="note">Edited caption text uses one cue across this clip.</p>}
                           {clip.error && <p role="alert" className="error">{clip.error}</p>}
                           <button type="button" className="secondary" disabled={clip.rendering || !batchVideos[item.jobId].transcriptPath}
