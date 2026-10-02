@@ -99,9 +99,38 @@ type ScheduleDraft = {
   published_at: string | null;
   error_message: string | null;
 };
+type QueueJob = ScheduleDraft & {
+  clip_id: number;
+  platform: string;
+  target_account_ref: string | null;
+  caption: string | null;
+  attempt_count: number;
+};
+type PlanItem = {
+  id: string;
+  jobId: string;
+  title: string;
+  render: RenderResult;
+  caption: string;
+  scheduledAt: string;
+  idempotencyKey: string;
+  status: "pending" | "uploading" | "asset_ready" | "clip_ready" | "draft_ready" | "error";
+  asset?: BackendAsset;
+  clipId?: number;
+  draftId?: number;
+  error?: string;
+};
+type SavedPlan = { ownerEmail: string; platform: string; target: string; items: PlanItem[]; approvalStarted: boolean };
 type Page = "overview" | "local" | "channel";
 type EngineConnection = { base_url: string; token: string };
 const channelStorageKey = "tv7-channel-batch-v1";
+const schedulePlanStorageKey = "tv7-channel-schedule-plan-v1";
+function loadSchedulePlan(): SavedPlan | null {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(schedulePlanStorageKey) ?? "null") as SavedPlan | null;
+    return saved && Array.isArray(saved.items) && saved.items.length > 0 ? saved : null;
+  } catch { return null; }
+}
 function loadChannelBatch(): { jobs: BatchJob[]; videos: Record<string, BatchVideo> } {
   try {
     const saved = JSON.parse(window.localStorage.getItem(channelStorageKey) ?? "null") as { jobs?: BatchJob[]; videos?: Record<string, BatchVideo> } | null;
@@ -129,6 +158,10 @@ const formatSize = (bytes: number) =>
   bytes < 1048576
     ? `${(bytes / 1024).toFixed(1)} KiB`
     : `${(bytes / 1048576).toFixed(1)} MiB`;
+const localDateTime = (value: string) => {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+};
 
 async function request<T>(
   base: string,
@@ -242,6 +275,7 @@ export default function App() {
   const [accountEmail, setAccountEmail] = useState("");
   const [accountPassword, setAccountPassword] = useState("");
   const [accessToken, setAccessToken] = useState("");
+  const [signedInEmail, setSignedInEmail] = useState("");
   const [youtubeConnection, setYoutubeConnection] =
     useState<YouTubeConnection | null>(null);
   const [license, setLicense] = useState<LicenseReadiness | null>(null);
@@ -277,7 +311,41 @@ export default function App() {
   const [batchPreviewError, setBatchPreviewError] = useState("");
   const startedBatchVideos = useRef(new Set(Object.keys(restoredChannelBatch.videos)));
   const batchQueue = useRef<Promise<void>>(Promise.resolve());
+  const [planStart, setPlanStart] = useState(() => {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    tomorrow.setHours(9, 0, 0, 0);
+    return `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}T09:00`;
+  });
+  const [planSpacing, setPlanSpacing] = useState(3);
+  const [planPlatform, setPlanPlatform] = useState("youtube_shorts");
+  const [planTarget, setPlanTarget] = useState("");
+  const [planIncluded, setPlanIncluded] = useState<Record<string, boolean>>({});
+  const [schedulePlan, setSchedulePlan] = useState<SavedPlan | null>(loadSchedulePlan);
+  const [planBusy, setPlanBusy] = useState(false);
+  const approvalInFlight = useRef(false);
+  const [planError, setPlanError] = useState("");
+  const [queue, setQueue] = useState<QueueJob[]>([]);
+  const [queueBusy, setQueueBusy] = useState(false);
+  const [queueError, setQueueError] = useState("");
+  const [queueHasMore, setQueueHasMore] = useState(false);
+  const [queueDates, setQueueDates] = useState<Record<number, string>>({});
+  const loadQueue = useCallback(async (offset = 0) => {
+    if (!accessToken) return;
+    setQueueBusy(true);
+    setQueueError("");
+    try {
+      const fetched = await backendRequest<QueueJob[]>(`/api/v1/schedule-jobs?limit=100&offset=${offset}`, accessToken);
+      setQueue((current) => offset ? [...current, ...fetched] : fetched);
+      setQueueHasMore(fetched.length === 100);
+      setQueueDates((current) => ({ ...current, ...Object.fromEntries(fetched.filter((job) => job.scheduled_at).map((job) => [job.id, localDateTime(job.scheduled_at!)])) }));
+    } catch (error) { setQueueError(String(error)); }
+    finally { setQueueBusy(false); }
+  }, [accessToken]);
+  useEffect(() => { if (accessToken) queueMicrotask(() => void loadQueue()); }, [accessToken, loadQueue]);
   const selected = Object.values(selection);
+  const renderedBatchClips = jobs.flatMap((job) => (batchVideos[job.jobId]?.clips ?? [])
+    .filter((clip) => clip.result?.media_id)
+    .map((clip) => ({ job, clip })));
   const sourceStreamUrl = !token && fileResult?.media_path && base
     ? `${base}/v1/media/source?path=${encodeURIComponent(fileResult.media_path)}`
     : null;
@@ -287,6 +355,12 @@ export default function App() {
   useEffect(() => {
     try { window.localStorage.setItem(channelStorageKey, JSON.stringify({ jobs, videos: batchVideos })); } catch { /* Local storage may be unavailable. */ }
   }, [jobs, batchVideos]);
+  useEffect(() => {
+    try {
+      if (schedulePlan) window.localStorage.setItem(schedulePlanStorageKey, JSON.stringify(schedulePlan));
+      else window.localStorage.removeItem(schedulePlanStorageKey);
+    } catch { /* Local storage may be unavailable. */ }
+  }, [schedulePlan]);
 
   useEffect(() => {
     if (!batchPreview || !base) return;
@@ -842,6 +916,7 @@ export default function App() {
         },
       );
       setAccessToken(result.access_token);
+      setSignedInEmail(accountEmail.trim().toLowerCase());
       setAccountPassword("");
       try {
         setLicense(
@@ -861,6 +936,8 @@ export default function App() {
         setYoutubeConnection(youtube);
         if (youtube.connected && youtube.channel_id)
           setTargetAccount(`youtube:${youtube.channel_id}`);
+        if (youtube.connected && youtube.channel_id)
+          setPlanTarget(`youtube:${youtube.channel_id}`);
       } catch {
         setYoutubeConnection(null);
       }
@@ -872,11 +949,114 @@ export default function App() {
   }
   function signOut() {
     setAccessToken("");
+    setSignedInEmail("");
     setYoutubeConnection(null);
     setLicense(null);
     setAsset(null);
     setCloudClip(null);
     setDraft(null);
+    setQueue([]);
+  }
+  function buildSchedulePlan() {
+    setPlanError("");
+    if (schedulePlan) { setPlanError("Archive the current local plan before creating another. Backend drafts already created by it remain in the queue."); return; }
+    const start = new Date(planStart);
+    if (!Number.isFinite(start.getTime()) || start.getTime() <= Date.now()) { setPlanError("Choose a future start date and time."); return; }
+    if (!Number.isInteger(planSpacing) || planSpacing < 1 || planSpacing > 30) { setPlanError("Spacing must be 1–30 days."); return; }
+    const requiredPrefix = `${planPlatform === "youtube_shorts" ? "youtube" : planPlatform}:`;
+    if (!planTarget.trim().startsWith(requiredPrefix) || planTarget.trim().length <= requiredPrefix.length) {
+      setPlanError(`Target account reference must start with ${requiredPrefix} and include an account ID.`); return;
+    }
+    const rendered = jobs.flatMap((job) => (batchVideos[job.jobId]?.clips ?? [])
+      .filter((clip) => clip.result?.media_id && planIncluded[`${job.jobId}:${clip.id}`] !== false)
+      .map((clip) => ({ job, clip })));
+    if (!rendered.length) { setPlanError("Select at least one rendered clip."); return; }
+    if (rendered.length > 25) { setPlanError("Select at most 25 clips for one schedule plan."); return; }
+    const items: PlanItem[] = rendered.map(({ job, clip }, index) => ({
+      id: `${job.jobId}:${clip.id}`, jobId: job.jobId, title: `${job.title} · clip ${index + 1}`,
+      render: clip.result!, caption: clip.captionText,
+      scheduledAt: new Date(start.getTime() + index * planSpacing * 86400000).toISOString(),
+      idempotencyKey: crypto.randomUUID(), status: "pending",
+    }));
+    setSchedulePlan({ ownerEmail: "", platform: planPlatform, target: planTarget.trim(), items, approvalStarted: false });
+  }
+  function updatePlanItem(id: string, patch: Partial<PlanItem>) {
+    setSchedulePlan((current) => current ? { ...current, items: current.items.map((item) => item.id === id ? { ...item, ...patch } : item) } : null);
+  }
+  async function approveSchedulePlan() {
+    if (!schedulePlan || !accessToken || approvalInFlight.current) return;
+    if (schedulePlan.ownerEmail && schedulePlan.ownerEmail !== signedInEmail) { setPlanError("Sign in with the account that approved this plan to retry it."); return; }
+    if (!schedulePlan.target || !schedulePlan.items.length) return;
+    const requiredPrefix = `${schedulePlan.platform === "youtube_shorts" ? "youtube" : schedulePlan.platform}:`;
+    if (!schedulePlan.target.startsWith(requiredPrefix) || schedulePlan.target.length <= requiredPrefix.length) {
+      setPlanError(`Target account reference must start with ${requiredPrefix} and include an account ID.`); return;
+    }
+    approvalInFlight.current = true;
+    setPlanBusy(true);
+    setPlanError("");
+    setSchedulePlan((current) => current ? { ...current, ownerEmail: current.ownerEmail || signedInEmail, approvalStarted: true } : null);
+    for (const original of schedulePlan.items) {
+      if (original.status === "draft_ready") continue;
+      let item = original;
+      const save = (patch: Partial<PlanItem>) => { item = { ...item, ...patch }; updatePlanItem(item.id, patch); };
+      try {
+        if (!item.render.media_id) throw new Error("Rendered Engine asset is missing.");
+        if (!item.asset) {
+          save({ status: "uploading", error: "" });
+          const headers = new Headers();
+          if (token) headers.set("Authorization", `Bearer ${token}`);
+          const response = await fetch(`${base}/v1/media/assets/${encodeURIComponent(item.render.media_id)}`, { headers });
+          if (!response.ok) throw new Error(`Engine export unavailable (HTTP ${response.status}). Rerender this clip in Channel batch, then use its latest render in this plan before retrying.`);
+          if (!response.headers.get("Content-Type")?.startsWith("video/mp4")) throw new Error("Engine did not return an MP4 clip.");
+          const body = new FormData();
+          body.append("file", await response.blob(), `tv7-${item.id.replaceAll(":", "-")}.mp4`);
+          const uploaded = await backendRequest<BackendAsset>("/api/v1/uploads/assets", accessToken, { method: "POST", body });
+          save({ asset: uploaded, status: "asset_ready" });
+        }
+        if (!item.clipId) {
+          const source = jobs.find((job) => job.jobId === item.jobId);
+          if (!source) throw new Error("Source video metadata is unavailable.");
+          const video = await backendRequest<CloudVideo>("/api/v1/videos/local", accessToken, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ source_url: `local://${item.jobId}`, title: source.title, original_filename: source.title }),
+          });
+          const existing = video.clips.find((clip) => clip.asset_url === item.asset!.asset_url);
+          const created = existing ?? await backendRequest<CloudClip>(`/api/v1/videos/${video.id}/clips`, accessToken, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ start_sec: item.render.start_seconds, end_sec: item.render.end_seconds,
+              asset_url: item.asset!.asset_url, asset_checksum: item.asset!.asset_checksum,
+              asset_size_bytes: item.asset!.asset_size_bytes, ready_local_only: false,
+              caption_text: item.caption, status: "ready" }),
+          });
+          save({ clipId: created.id, status: "clip_ready" });
+        }
+        const draft = await backendRequest<ScheduleDraft>(`/api/v1/clips/${item.clipId}/schedule-drafts`, accessToken, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ platform: schedulePlan.platform, target_account_ref: schedulePlan.target,
+            scheduled_at: item.scheduledAt, caption: item.caption, asset_id: item.asset!.asset_id,
+            idempotency_key: item.idempotencyKey }),
+        });
+        save({ draftId: draft.id, status: "draft_ready", error: "" });
+      } catch (error) { save({ status: "error", error: String(error) }); }
+    }
+    setPlanBusy(false);
+    approvalInFlight.current = false;
+    void loadQueue();
+  }
+  async function changeQueueJob(id: number, action: "cancel" | "reschedule") {
+    if (!accessToken) return;
+    setQueueBusy(true);
+    setQueueError("");
+    try {
+      const scheduled = new Date(queueDates[id]);
+      if (action === "reschedule" && (!Number.isFinite(scheduled.getTime()) || scheduled.getTime() <= Date.now())) throw new Error("Choose a future date and time.");
+      const updated = await backendRequest<QueueJob>(`/api/v1/schedule-jobs/${id}${action === "cancel" ? "/cancel" : ""}`, accessToken, {
+        method: action === "cancel" ? "POST" : "PATCH",
+        ...(action === "reschedule" ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scheduled_at: scheduled.toISOString() }) } : {}),
+      });
+      setQueue((current) => current.map((job) => job.id === id ? updated : job));
+    } catch (error) { setQueueError(String(error)); }
+    finally { setQueueBusy(false); }
   }
   async function approveCloudHandoff() {
     if (!renderResult?.media_id || !fileResult || !accessToken) return;
@@ -1898,6 +2078,95 @@ export default function App() {
                   ))}
                 </section>
               )}
+              <section className="panel">
+                <span className="kicker">REVIEW / SCHEDULE</span>
+                <h2>Plan a channel release queue</h2>
+                <p className="note">Choose rendered clips, review dates and captions, then explicitly approve private uploads and Backend schedule drafts. A draft is not a live post.</p>
+                {renderedBatchClips.length > 0 && !schedulePlan && <>
+                  <div className="video-list">
+                    {renderedBatchClips.map(({ job, clip }) => <label className="video-row" key={`${job.jobId}:${clip.id}`}>
+                      <input type="checkbox" checked={planIncluded[`${job.jobId}:${clip.id}`] !== false}
+                        onChange={(event) => setPlanIncluded((current) => ({ ...current, [`${job.jobId}:${clip.id}`]: event.target.checked }))} />
+                      <span><strong>{job.title}</strong><small>{clip.start}–{clip.end} seconds · {clip.captionText}</small></span>
+                    </label>)}
+                  </div>
+                  <div className="form-row">
+                    <label>First local date and time<input type="datetime-local" value={planStart}
+                      onChange={(event) => setPlanStart(event.target.value)} /></label>
+                    <label>Days between clips<input type="number" min="1" max="30" value={planSpacing}
+                      onChange={(event) => setPlanSpacing(Number(event.target.value))} /></label>
+                  </div>
+                  <div className="form-row">
+                    <label>Platform<select value={planPlatform} onChange={(event) => setPlanPlatform(event.target.value)}>
+                      <option value="youtube_shorts">YouTube Shorts (draft only)</option><option value="tiktok">TikTok (draft only)</option><option value="instagram">Instagram (draft only)</option>
+                    </select></label>
+                    <label>Target account reference<input value={planTarget} placeholder="youtube:channel-id"
+                      onChange={(event) => setPlanTarget(event.target.value)} /></label>
+                  </div>
+                  <p className="note">All platforms create drafts only here. Live publishing requires a connected account and an enabled Backend adapter.</p>
+                  <button type="button" className="secondary" onClick={buildSchedulePlan}>Create review plan</button>
+                </>}
+                {schedulePlan && <>
+                  <p className="note">{schedulePlan.items.length} clips · {schedulePlan.platform} · {schedulePlan.target} · {new Date(schedulePlan.items[0]!.scheduledAt).toLocaleString()} to {new Date(schedulePlan.items.at(-1)!.scheduledAt).toLocaleString()}</p>
+                  {schedulePlan.items.map((item) => {
+                    const latest = batchVideos[item.jobId]?.clips.find((clip) => `${item.jobId}:${clip.id}` === item.id)?.result;
+                    return <div className="clip-editor" key={item.id}>
+                      <h3>{item.title}</h3><span>{item.status}{item.draftId ? ` · Backend draft #${item.draftId}` : ""}</span>
+                      <label>Requested local date and time<input type="datetime-local" value={localDateTime(item.scheduledAt)}
+                        disabled={schedulePlan.approvalStarted}
+                        onChange={(event) => { const date = new Date(event.target.value); if (Number.isFinite(date.getTime())) updatePlanItem(item.id, { scheduledAt: date.toISOString() }); }} /></label>
+                      <label>Caption preview<textarea rows={3} value={item.caption} disabled={schedulePlan.approvalStarted}
+                        onChange={(event) => updatePlanItem(item.id, { caption: event.target.value })} /></label>
+                      {item.error && <p role="alert" className="error">{item.error}</p>}
+                      {item.status === "error" && !item.asset && latest?.media_id && latest.media_id !== item.render.media_id &&
+                        <button type="button" className="secondary" disabled={planBusy}
+                          onClick={() => updatePlanItem(item.id, { render: latest, status: "pending", error: "" })}>Use latest local render</button>}
+                    </div>;
+                  })}
+                  <button type="button" className="primary" disabled={!accessToken || planBusy || schedulePlan.items.every((item) => item.status === "draft_ready")}
+                    onClick={() => void approveSchedulePlan()}>{planBusy ? "Creating drafts…" : schedulePlan.approvalStarted ? "Retry unfinished items" : "Approve private uploads and schedule drafts"}</button>
+                  <button type="button" className="secondary" disabled={planBusy}
+                    onClick={() => setSchedulePlan(null)}>Archive local plan</button>
+                  <p className="note">Archiving removes this local plan only. Any Backend drafts already created remain in the account queue.</p>
+                </>}
+                {planError && <p role="alert" className="error">{planError}</p>}
+              </section>
+              <section className="panel">
+                <span className="kicker">ACCOUNT / BACKEND</span>
+                <h2>Schedule queue</h2>
+                <p className="note">Backend draft status is authoritative. Pending drafts can be rescheduled or cancelled before any publish attempt; no live post is initiated here.</p>
+                {!accessToken ? <form onSubmit={(event) => { event.preventDefault(); void signIn(); }}>
+                  <label>TV7 account email<input type="email" required autoComplete="username" value={accountEmail}
+                    onChange={(event) => setAccountEmail(event.target.value)} /></label>
+                  <label>Password<input type="password" required autoComplete="current-password" value={accountPassword}
+                    onChange={(event) => setAccountPassword(event.target.value)} /></label>
+                  <button className="secondary" disabled={loginBusy}>{loginBusy ? "Signing in…" : "Sign in to view queue"}</button>
+                </form> : <div className="account-row"><span>Signed in as {signedInEmail}</span><button className="secondary" onClick={signOut}>Sign out</button></div>}
+                {loginError && <p role="alert" className="error">{loginError}</p>}
+                {accessToken && youtubeConnection && <p className="note">YouTube account: {youtubeConnection.connected ? youtubeConnection.channel_title ?? youtubeConnection.channel_id : "not connected"}.</p>}
+                {accessToken && <>
+                  <button type="button" className="secondary" disabled={queueBusy} onClick={() => void loadQueue()}>Refresh queue</button>
+                  {queueError && <p role="alert" className="error">{queueError}</p>}
+                  {queue.length === 0 && !queueBusy && <p className="note">No Backend schedule jobs in this account.</p>}
+                  {queue.map((job) => <div className="job" key={job.id}>
+                    <strong>Draft #{job.id} · clip #{job.clip_id}</strong>
+                    <span>{job.platform} · {job.status} · {job.target_account_ref ?? "target unavailable"}</span>
+                    <span>{job.scheduled_at ? new Date(job.scheduled_at).toLocaleString() : "No requested time"}</span>
+                    {job.caption && <small>{job.caption}</small>}
+                    {job.error_message && <p className="error">{job.error_message}</p>}
+                    {job.status === "pending" && job.attempt_count === 0 && <>
+                      <label>New local date and time<input type="datetime-local" value={queueDates[job.id] ?? ""}
+                        onChange={(event) => setQueueDates((current) => ({ ...current, [job.id]: event.target.value }))} /></label>
+                      <button type="button" className="secondary" disabled={queueBusy}
+                        onClick={() => void changeQueueJob(job.id, "reschedule")}>Reschedule</button>
+                      <button type="button" className="secondary" disabled={queueBusy}
+                        onClick={() => void changeQueueJob(job.id, "cancel")}>Cancel draft</button>
+                    </>}
+                  </div>)}
+                  {queueHasMore && <button type="button" className="secondary" disabled={queueBusy}
+                    onClick={() => void loadQueue(queue.length)}>Load more</button>}
+                </>}
+              </section>
             </>
           )}
         </main>
