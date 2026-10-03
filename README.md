@@ -27,7 +27,7 @@ make run-desktop
 make package
 ```
 
-The Tauri package starts its bundled Engine on a dynamic loopback port with a per-launch bearer token and an app-owned work directory. Quitting Studio stops that Engine child. The development browser Engine is a separate process. `make package` compiles the sibling Engine and creates `src-tauri/target/release/bundle/macos/TV7 Studio.app`.
+The Tauri package starts its bundled Engine on a dynamic loopback port with a per-launch bearer token and an app-owned work directory. Quitting Studio stops that Engine child. The macOS package includes a checksum-verified official yt-dlp binary; Studio passes its absolute path to Engine. It also restores the user's shell PATH so host-installed FFmpeg and Node or Deno are visible in a Finder-launched app. The development browser Engine is a separate process. `make package` compiles the sibling Engine and creates `src-tauri/target/release/bundle/macos/TV7 Studio.app`.
 
 ## Checks
 
@@ -35,7 +35,7 @@ The Tauri package starts its bundled Engine on a dynamic loopback port with a pe
 
 ## Release boundaries
 
-The current editor supports timing adjustments for one candidate and has no timeline preview, automatic transcription, or viral scoring. FFmpeg, FFprobe, yt-dlp, and a JavaScript runtime for some downloads still rely on host installation. Windows packaging, signing, updates, provider connections, live scheduled publishing, billing, and paid storage remain release work. A browser tab is for local development; the shipped app is the desktop package.
+Studio automatically acquires source captions or transcribes locally, proposes editable clip ranges, and renders confirmed channel batches. Optional cloud AI suggestions are editorial cues, not calibrated virality predictions. A full timeline editor remains future work. FFmpeg, FFprobe, and a supported JavaScript runtime still rely on host installation; a clean-install bundle is tracked separately. Windows packaging, signing, updates, provider connections, live scheduled publishing, billing, and paid storage remain release work. A browser tab is for local development; the shipped app is the desktop package.
 
 ## License
 

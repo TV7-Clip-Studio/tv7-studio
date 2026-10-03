@@ -50,6 +50,21 @@ pub fn run() {
                     .map_err(|e| e.to_string())?
                     .join("engine");
                 std::fs::create_dir_all(&work_dir).map_err(|e| e.to_string())?;
+                let executable_dir = std::env::current_exe()
+                    .map_err(|e| e.to_string())?
+                    .parent()
+                    .ok_or("Cannot locate Studio's executable directory")?
+                    .to_path_buf();
+                let bundled_yt_dlp = executable_dir
+                    .join("../Resources/yt-dlp/yt-dlp-macos");
+                let yt_dlp = if bundled_yt_dlp.is_file() {
+                    bundled_yt_dlp
+                } else {
+                    executable_dir.join("yt-dlp/yt-dlp-macos")
+                };
+                if !yt_dlp.is_file() {
+                    return Err(format!("Bundled yt-dlp is missing: {}", yt_dlp.display()));
+                }
                 let command = app
                     .shell()
                     .sidecar("engine-service")
@@ -57,6 +72,7 @@ pub fn run() {
                     .env("TV7_ENGINE_HOST", "127.0.0.1")
                     .env("TV7_ENGINE_PORT", port.to_string())
                     .env("TV7_ENGINE_API_TOKEN", &token)
+                    .env("TV7_ENGINE_YT_DLP_BIN", yt_dlp.to_string_lossy().to_string())
                     .env("TV7_ENGINE_WORK_DIR", work_dir.to_string_lossy().to_string());
                 let (mut events, child) = command.spawn().map_err(|e| e.to_string())?;
                 tauri::async_runtime::spawn(async move {

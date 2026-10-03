@@ -17,3 +17,4 @@ tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 getrandom = "0.3"
 serde = { version = "1", features = ["derive"] }
+fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c4c45d503ea115a839aae718d02f79e7c7f0f673" }

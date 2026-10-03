@@ -27,6 +27,12 @@
     "active": true,
     "targets": ["app"],
     "category": "Video",
-    "externalBin": ["binaries/engine-service"]
+    "externalBin": ["binaries/engine-service"],
+    "macOS": {
+      "files": {
+        "Resources/yt-dlp/yt-dlp-macos": "./binaries/yt-dlp-macos",
+        "Resources/yt-dlp/_internal": "./binaries/yt-dlp-internal"
+      }
+    }
   }
 }

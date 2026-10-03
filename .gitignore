@@ -20,6 +20,8 @@ output/playwright/
 src-tauri/target/
 src-tauri/gen/
 src-tauri/binaries/engine-service-*
+src-tauri/binaries/yt-dlp-*
+src-tauri/binaries/_internal
 
 # Editor directories and files
 .vscode/*

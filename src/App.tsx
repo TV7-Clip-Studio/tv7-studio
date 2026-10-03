@@ -35,6 +35,7 @@ type BatchVideo = {
 type Diagnostics = {
   status?: string;
   capabilities?: { name: string; status: string }[];
+  tools?: { name: string; available: boolean | null; required_for?: string[]; error?: string | null }[];
 };
 type MediaMetadata = {
   duration_seconds: number | null;
@@ -1411,6 +1412,12 @@ export default function App() {
     }
   }
   const ready = Boolean(base) && health === "ok";
+  const channelToolsReady = diagnostics?.capabilities?.some(
+    (capability) => capability.name === "url_ingest" && capability.status === "ready",
+  ) ?? false;
+  const missingChannelTools = diagnostics?.tools?.filter(
+    (tool) => tool.required_for?.includes("url_ingest") && tool.available !== true,
+  ) ?? [];
   return (
     <div className="shell">
       <header className="topbar">
@@ -2059,6 +2066,11 @@ export default function App() {
                 which ones Engine may download. Choose only media you have
                 rights to use; download failures are shown per job.
               </p>
+              {ready && !channelToolsReady && <p role="alert" className="error">
+                Channel discovery needs yt-dlp and a supported JavaScript runtime (Node or Deno).
+                {missingChannelTools.length > 0 && <> Missing: {missingChannelTools.map((tool) => tool.name).join(", ")}.</>}
+                {" "}Install the missing tools, restart TV7 Studio, then try again.
+              </p>}
               <section className="panel">
                 <form
                   onSubmit={(event) => {
@@ -2083,7 +2095,7 @@ export default function App() {
                     />
                     <button
                       className="primary"
-                      disabled={!ready || discoverBusy}
+                      disabled={!ready || !channelToolsReady || discoverBusy}
                     >
                       {discoverBusy ? "Discovering…" : "Discover videos"}
                     </button>
