@@ -384,6 +384,80 @@ form label {
   gap: 14px;
   margin: 20px 0;
 }
+.clip-picker {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 14px 0;
+}
+.clip-choice {
+  display: grid;
+  gap: 5px;
+  flex: 0 0 168px;
+  text-align: left;
+  padding: 12px;
+  border: 1px solid #3b4744;
+  border-radius: 10px;
+  background: #171d20;
+  color: #f5f5f2;
+}
+.clip-choice.active,
+.clip-choice[aria-pressed="true"] {
+  border-color: #c8ec71;
+  background: #24301e;
+}
+.clip-choice span,
+.clip-choice small {
+  color: #aeb8b6;
+  font-size: 12px;
+}
+.clip-choice button {
+  margin-top: 8px;
+}
+.trim-controls {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #3b4744;
+  border-radius: 10px;
+  background: #171d20;
+}
+.trim-controls input[type="range"] {
+  display: block;
+  width: 100%;
+  accent-color: #c8ec71;
+}
+.manual-clip {
+  margin-top: 20px;
+  color: #aeb8b6;
+}
+.file-chooser > summary,
+.optional-tools > summary,
+.manual-clip > summary {
+  cursor: pointer;
+  color: #c9ee72;
+  font-weight: 700;
+}
+.file-chooser:not([open]) {
+  margin-bottom: 4px;
+}
+.file-chooser .file-zone {
+  margin-top: 12px;
+}
+.source-review {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+}
+.source-review h3 {
+  margin: 0;
+}
+.source-review video {
+  max-height: 290px;
+}
+.optional-tools {
+  margin: 16px 0;
+}
 .clip-editor .form-row label {
   flex: 1;
 }
