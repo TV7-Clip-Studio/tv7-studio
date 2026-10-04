@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import MultiClipTimeline from "./components/clipping/MultiClipTimeline";
 import "./App.css";
 
 type Video = {
@@ -237,6 +238,7 @@ async function backendRequest<T>(
 export default function App() {
   const mediaVersion = useRef(0);
   const sourcePlayer = useRef<HTMLVideoElement | null>(null);
+  const autoSeekedClip = useRef<string | null>(null);
   const previewRangeEnd = useRef<number | null>(null);
   const selectedClipIdRef = useRef<string | null>(null);
   const [page, setPage] = useState<Page>("overview");
@@ -275,6 +277,7 @@ export default function App() {
   const [clipDrafts, setClipDrafts] = useState<ClipDraft[]>([]);
   const [openedBatchJobId, setOpenedBatchJobId] = useState<string | null>(null);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const [playhead, setPlayhead] = useState(0);
   const [localAiSuggestions, setLocalAiSuggestions] = useState<AiSuggestion[]>([]);
   const [localAiError, setLocalAiError] = useState("");
   const [aiConsent, setAiConsent] = useState(false);
@@ -372,6 +375,16 @@ export default function App() {
   const sourceDisplayUrl = sourceStreamUrl ?? sourcePreviewUrl;
   const sourceTooLarge = Boolean(token && (fileResult?.size_bytes ?? 0) > 250 * 1024 * 1024);
   const activeClip = clipDrafts.find((clip) => clip.id === selectedClipId) ?? clipDrafts[0];
+  const activeClipId = activeClip?.id;
+  const activeClipStart = activeClip?.start;
+
+  useEffect(() => {
+    if (!fileResult?.media_path || !activeClipId || !sourceDisplayUrl || !sourcePlayer.current || sourcePlayer.current.readyState < 1) return;
+    const key = `${fileResult.media_path}:${activeClipId}`;
+    if (autoSeekedClip.current === key) return;
+    sourcePlayer.current.currentTime = Number(activeClipStart) || 0;
+    autoSeekedClip.current = key;
+  }, [fileResult?.media_path, activeClipId, activeClipStart, sourceDisplayUrl]);
 
   useEffect(() => {
     try { window.localStorage.setItem(channelStorageKey, JSON.stringify({ jobs, videos: batchVideos })); } catch { /* Local storage may be unavailable. */ }
@@ -840,6 +853,21 @@ export default function App() {
     previewRangeEnd.current = Number(clip.end);
     player.currentTime = Number(clip.start);
     void player.play().catch(() => { previewRangeEnd.current = null; });
+  }
+  function selectClip(clip: ClipDraft) {
+    setSelectedClipId(clip.id);
+    selectedClipIdRef.current = clip.id;
+    setRenderResult(clip.result ?? null);
+    setPreviewError("");
+    setAsset(null); setCloudClip(null); setDraft(null);
+  }
+  function seekSource(seconds: number) {
+    previewRangeEnd.current = null;
+    if (sourcePlayer.current) sourcePlayer.current.currentTime = seconds;
+    setPlayhead(seconds);
+  }
+  function setClipRange(id: string, range: { start: number; end: number }) {
+    updateClip(id, { start: range.start.toFixed(2), end: range.end.toFixed(2), result: undefined });
   }
   async function renderClip(clip: ClipDraft, context?: { mediaPath: string; duration?: number | null; transcriptPath?: string }): Promise<RenderResult> {
     const mediaPath = context?.mediaPath ?? fileResult?.media_path;
@@ -1478,7 +1506,7 @@ export default function App() {
             publishing are still in development.
           </p>
         </nav>
-        <main>
+        <main className={page === "local" && fileResult ? "studio-edit-main" : ""}>
           {page === "overview" && (
             <>
               <span className="kicker">LOCAL WORKSPACE</span>
@@ -1542,11 +1570,10 @@ export default function App() {
           )}
           {page === "local" && (
             <>
-              <span className="kicker">{fileResult ? "REVIEW / 01" : "INGEST / 01"}</span>
-              <h1>{fileResult ? "Clip workspace" : "Local media"}</h1>
-              <p className="lead">
-                {fileResult ? `Review and tune ${fileResult.name}. The media and rendering stay on this computer.` : "Choose a file from this computer. It is copied into Engine’s local workspace, without sending it to Backend."}
-              </p>
+              {fileResult ? <div className="workspace-title"><h1>Clip workspace</h1><span title={fileResult.name}>{fileResult.name}</span></div> : <>
+                <span className="kicker">INGEST / 01</span><h1>Local media</h1>
+                <p className="lead">Choose a file from this computer. It is copied into Engine’s local workspace, without sending it to Backend.</p>
+              </>}
               <section className="panel">
                 <details className="file-chooser" open={!fileResult}>
                   <summary>{fileResult ? "Choose a different video file" : "Choose a video file"}</summary>
@@ -1600,9 +1627,10 @@ export default function App() {
                   </div>
                 )}
               </section>
-              <section className="panel" id="clip-workspace">
-                <span className="kicker">TRANSCRIPT / CLIP</span>
-                <h2>Review clip batch</h2>
+              <section className="panel workspace-panel" id="clip-workspace">
+                <div className="heading"><h2>Timeline</h2>
+                  <span className="count">{clipDrafts.length} clips · {clipDrafts.filter((clip) => clip.result).length} ready</span></div>
+                <details className="workspace-tools"><summary>Transcript and clip proposals {transcript ? "· ready" : ""}</summary>
                 <p className="note">
                   Studio automatically looks for source captions, then asks Engine
                   to transcribe locally. The proposed ranges are timing candidates,
@@ -1677,26 +1705,33 @@ export default function App() {
                     No candidate ranges found in this transcript.
                   </p>
                 )}
+                </details>
+                <div className="workspace-columns">
+                  <div className="workspace-stage">
+                    <div className="stage-heading"><strong>Source video</strong><span>{fileResult?.metadata?.duration_seconds?.toFixed(1) ?? "—"}s total</span></div>
+                    {fileResult && (sourceDisplayUrl ? <video ref={sourcePlayer} controls src={sourceDisplayUrl}
+                      onLoadedMetadata={(event) => { if (activeClip && fileResult) { event.currentTarget.currentTime = Number(activeClip.start) || 0; setPlayhead(Number(activeClip.start) || 0); autoSeekedClip.current = `${fileResult.media_path}:${activeClip.id}`; } }}
+                      onTimeUpdate={(event) => { setPlayhead(event.currentTarget.currentTime); if (previewRangeEnd.current !== null && event.currentTarget.currentTime >= previewRangeEnd.current) { event.currentTarget.pause(); previewRangeEnd.current = null; } }}
+                      aria-label="Source video preview" className="workspace-video" /> :
+                      <div className="video-placeholder">{sourceTooLarge ? "Source preview is limited to 250 MiB in the desktop app. Timeline edits and rendering still work." : "Loading source preview…"}</div>)}
+                    {sourcePreviewError && <p role="alert" className="error">{sourcePreviewError}</p>}
+                    {fileResult?.metadata?.duration_seconds && <MultiClipTimeline clips={clipDrafts} duration={fileResult.metadata.duration_seconds}
+                      selectedId={activeClip?.id ?? null} playhead={playhead}
+                      onSelect={(id) => { const clip = clipDrafts.find((item) => item.id === id); if (clip) selectClip(clip); }}
+                      onSeek={seekSource} onChange={setClipRange} />}
+                    <div className="stage-actions"><span>{activeClip ? `Clip ${clipDrafts.findIndex((clip) => clip.id === activeClip.id) + 1} · ${activeClip.start}–${activeClip.end}s` : "Watch the source, then select a clip to edit"}</span>
+                      {clipDrafts.length > 0 && <button type="button" className="secondary" disabled={batchRendering || !ready}
+                        onClick={() => void renderBatch()}>{batchRendering ? "Rendering batch…" : `Render all ${clipDrafts.length}`}</button>}</div>
+                  </div>
+                  <div className="workspace-inspector">
                 {clipDrafts.length > 0 && <>
-                  <button type="button" className="primary" disabled={batchRendering || !ready}
-                    onClick={() => void renderBatch()}>{batchRendering ? "Rendering batch…" : `Render ${clipDrafts.length} clips locally`}</button>
-                  <p className="note">New drafts use vertical 9:16 fit with subtitles on. {openedBatchJobId ? "Edits and new renders here update this channel video's release queue automatically." : "Adjust only what needs attention, then render."}</p>
                   <div className="clip-picker" role="group" aria-label="Choose a clip to edit">
                     {clipDrafts.map((clip, index) => <button key={clip.id} type="button" className={activeClip?.id === clip.id ? "clip-choice active" : "clip-choice"}
                       aria-pressed={activeClip?.id === clip.id}
-                      onClick={() => { setSelectedClipId(clip.id); selectedClipIdRef.current = clip.id; setRenderResult(clip.result ?? null); setPreviewError(""); setAsset(null); setCloudClip(null); setDraft(null); if (sourcePlayer.current) sourcePlayer.current.currentTime = Number(clip.start) || 0; }}>
+                      onClick={() => { selectClip(clip); seekSource(Number(clip.start) || 0); }}>
                       <strong>Clip {index + 1}</strong><span>{clip.start}–{clip.end} s</span><small>{clip.rendering ? "Rendering" : clip.result ? "Ready" : "Needs render"}</small>
                     </button>)}
                   </div>
-                  {fileResult && <div className="source-review">
-                    <h3>Source preview</h3>
-                    {sourceDisplayUrl ? <video ref={sourcePlayer} controls src={sourceDisplayUrl}
-                      onTimeUpdate={(event) => { if (previewRangeEnd.current !== null && event.currentTarget.currentTime >= previewRangeEnd.current) { event.currentTarget.pause(); previewRangeEnd.current = null; } }}
-                      aria-label="Source video preview" className="clip-preview" /> :
-                      <p className="note">Loading source preview…</p>}
-                    {sourceTooLarge && <p role="alert" className="error">This source is too large for the desktop preview bridge. Clip rendering remains available.</p>}
-                    {sourcePreviewError && <p role="alert" className="error">{sourcePreviewError}</p>}
-                  </div>}
                   <div className="video-list" aria-label="Clip drafts">
                     {clipDrafts.filter((clip) => clip.id === activeClip?.id).map((clip) => <div className="clip-editor" key={clip.id}>
                       <h3>Clip {clipDrafts.findIndex((item) => item.id === clip.id) + 1}{clip.proposalSource === "ai" ? " · AI suggested range" : " · local timing range"}</h3>
@@ -1713,16 +1748,6 @@ export default function App() {
                         onClick={() => playSelectedRange(clip)}>
                         Play selected range
                       </button>
-                      {fileResult?.metadata?.duration_seconds && <div className="trim-controls" aria-label="Visual clip trim">
-                        <label>Start point
-                          <input type="range" min="0" max={Math.max(0, fileResult.metadata.duration_seconds - 0.1)} step="0.1" value={Number(clip.start) || 0}
-                            onChange={(event) => updateClip(clip.id, { start: Math.min(Number(event.target.value), Number(clip.end) - 0.1).toFixed(2), result: undefined })} />
-                        </label>
-                        <label>End point
-                          <input type="range" min="0.1" max={fileResult.metadata.duration_seconds} step="0.1" value={Number(clip.end) || 0.1}
-                            onChange={(event) => updateClip(clip.id, { end: Math.max(Number(event.target.value), Number(clip.start) + 0.1).toFixed(2), result: undefined })} />
-                        </label>
-                      </div>}
                       <div className="form-row">
                         <label>Start (seconds)<input type="number" min="0" step="0.01" value={clip.start}
                           onChange={(event) => updateClip(clip.id, { start: event.target.value, result: undefined })} /></label>
@@ -1744,7 +1769,7 @@ export default function App() {
                         <option value="vertical_9_16_crop">Vertical 9:16 center crop</option>
                       </select></label>
                       {clip.format === "vertical_9_16_crop" && <p className="note">Center crop removes left and right content. Render and preview this clip before any cloud handoff.</p>}
-                      <button type="button" className="secondary" disabled={clip.rendering || batchRendering || !ready}
+                      <button type="button" className="primary" disabled={clip.rendering || batchRendering || !ready}
                         onClick={() => void renderDraft(clip)}>{clip.rendering ? "Rendering…" : clip.result ? "Retry render" : "Render clip"}</button>
                       {clip.error && <p role="alert" className="error">{clip.error}</p>}
                       {clip.result && <div className="result"><span>Rendered locally · {clip.result.duration_seconds.toFixed(1)} seconds</span>
@@ -1752,13 +1777,9 @@ export default function App() {
                     </div>)}
                   </div>
                 </>}
-                {fileResult && clipDrafts.length === 0 && <div className="source-review">
-                  <h3>Source preview</h3>
-                  {sourceDisplayUrl ? <video ref={sourcePlayer} controls src={sourceDisplayUrl} aria-label="Source video preview" className="clip-preview" /> :
-                    <p className="note">Loading source preview…</p>}
-                  {sourceTooLarge && <p role="alert" className="error">This source is too large for the desktop preview bridge. Manual timing and rendering remain available.</p>}
-                  {sourcePreviewError && <p role="alert" className="error">{sourcePreviewError}</p>}
-                </div>}
+                {fileResult && clipDrafts.length === 0 && <p className="note">No proposed clips yet. Use the transcript tools above, or set a manual clip below.</p>}
+                  </div>
+                </div>
                 {fileResult && (
                   <details className="manual-clip"><summary>Manual clip fallback</summary>
                   <div className="clip-editor">
@@ -1830,7 +1851,8 @@ export default function App() {
                 )}
               </section>
               {renderResult && (
-                <section className="panel">
+                <details className="panel workspace-drawer">
+                  <summary>Optional cloud handoff and scheduling draft</summary>
                   <span className="kicker">OPTIONAL CLOUD HANDOFF</span>
                   <h2>Keep a private scheduling draft</h2>
                   <p className="note">
@@ -2031,9 +2053,10 @@ export default function App() {
                       </button>
                     </div>
                   )}
-                </section>
+                </details>
               )}
-              <section className="panel">
+              <details className="panel workspace-drawer" open={!fileResult}>
+                <summary>Import a video from one URL</summary>
                 <span className="kicker">SINGLE URL</span>
                 <h2>Import one video</h2>
                 <p className="note">
@@ -2102,11 +2125,8 @@ export default function App() {
                     ) : null}
                   </div>
                 )}
-              </section>
-              <p className="note">
-                Batch proposals come from transcript timing. A full timeline
-                editor and publishing are later integrations.
-              </p>
+              </details>
+              <p className="note">Clip proposals come from transcript timing. Review their ranges on the timeline before rendering; publishing remains a separate workflow.</p>
             </>
           )}
           {page === "channel" && (
