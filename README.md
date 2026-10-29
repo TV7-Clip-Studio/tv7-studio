@@ -36,3 +36,7 @@ The Tauri package starts its bundled Engine on a dynamic loopback port with a pe
 ## Release boundaries
 
 The current editor supports timing adjustments for one candidate and has no timeline preview, automatic transcription, or viral scoring. FFmpeg, FFprobe, yt-dlp, and a JavaScript runtime for some downloads still rely on host installation. Windows packaging, signing, updates, provider connections, live scheduled publishing, billing, and paid storage remain release work. A browser tab is for local development; the shipped app is the desktop package.
+
+## License
+
+TV7 source in this repository is available under the [MIT License](LICENSE). External dependencies and tools retain their respective licenses. See the [TV7 project overview](https://github.com/TV7-Clip-Studio/tv7-core/blob/main/PROJECT.md) for the repository map and current scope.
