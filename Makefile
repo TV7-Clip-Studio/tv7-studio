@@ -1,4 +1,4 @@
-.PHONY: help install lint build check run-web run-desktop package
+.PHONY: help install lint build test check run-web run-desktop package
 
 help:
 	@echo "TV7 Studio (React/Tauri)"
@@ -17,13 +17,16 @@ lint:
 build:
 	npm run build
 
-check: lint build
+test:
+	node --test scripts/*.test.mjs
+
+check: lint build test
 
 run-web:
 	npm run dev -- --host 127.0.0.1 --port 5173
 
 run-desktop:
-	npm run desktop:dev
+	sh scripts/with-rust-toolchain.sh npm run desktop:dev
 
 package:
-	npm run desktop:build
+	sh scripts/with-rust-toolchain.sh npm run desktop:build

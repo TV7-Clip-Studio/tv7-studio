@@ -1,0 +1,29 @@
+# Local visual remixes
+
+`Composition.tsx` is shared by lazy-loaded Studio Player and the Remotion Node export worker. 1080×1920, 30fps, H.264/AAC, original source audio, speech-timed Word box. Comedy, editorial, retro treatments remain separate library clips with `proposal_source=remix_<treatment>` and their own export/ID/post copy. Re-render uses the saved treatment. Smart schedule distinguishes treatments at the same source range.
+
+Engine `POST /v1/media/remix`: source, word_path (owned VTT), start/end (seconds, ≤180), treatment. Engine generates owned output/config names, invokes local worker, registers export and returns ordinary RenderClipResponse. It does not publish.
+
+Development runtime requires Studio npm dependencies, Node, and a local browser. macOS uses installed Chrome; override browser with TV7_REMIX_BROWSER and worker with TV7_ENGINE_REMIX_WORKER. This Node renderer is not bundled in the Tauri sidecar installer yet. Initial Chrome Headless Shell 157 timed out loading the root on this host; installed Chrome succeeds when one browser instance is shared between selection and render.
+
+## Configurable effects (2026-10-13)
+
+Each LibraryClip can save `remix_settings`: treatment, visual effect (none/impact/glitch/shockwave/freeze/whip), strength %, phrase frequency, 150/300/500ms length, background (blur/tunnel/kaleidoscope) and opacity %, sound accent (none/impact/digital/sweep), sound and dialogue percentages. The preview reads the saved recipe; creating a variant copies that recipe and original captions remain available. Existing render playback stays unchanged until a new export or re-render.
+
+PixiJS 8.22.0 + pixi-filters 6.1.5 filter only footage; captions render separately. VJ SVG backgrounds use @remotion/media-utils 4.0.535 audio spectrum at source time. Cue scheduling and animation use render frames; no live ticker or random shader seed. Freeze holds only the visual layer while speech continues. Sound assets are curated Kenney CC0 clips with original notices in public/remix-sfx.
+
+Dialogue peak analysis reserves mix headroom. Percentages are relative mix controls, not a LUFS target. The full 10s Glitch test exported 1080×1920 H.264/AAC, with decoded peak 0.886; impact/shockwave/freeze/whip also passed 2s export smoke checks. Studio has 14 passing tests; Engine validates enums/ranges and preserves settings in the catalog. Temporary bundle cleanup prevents repeated exports accumulating caches. No public provider post was made.
+
+Breathing room: clip recipes accept `breathingRoom` (2, 3, or 4 seconds; legacy recipes default to 3). Phrase bursts last at most 800ms, with a clean first/last second. VJ, blur and scanlines fade to zero; distortion filters bypass at zero strength and accents end before the clean interval. Dialogue and Word box remain. Frequency cannot shorten the selected clean gap.
+
+Art packs: Comic chaos (speed lines), Cutout collage (paper strips), Neon broadcast (HUD brackets), Psychedelic (orbiting rings), Minimal punch (single accent). Semantic stickers use deterministic Spanish keyword/phrase rules, not an LLM. Art intensity 0 hides all pack overlays. Graphic regions stop above Word box captions. Size and density are persisted with legacy-safe defaults. Local-only scope selected by the user; AI video generation is not wired or invoked. `creativeBrief` prepares an optional provider prompt for future integration.
+
+Global Library workflow: Clear clips keeps a browser recovery snapshot and removes catalog clip entries, local plan and editor drafts; source media and export files remain. Shuffle all operates on the active creator profile, generates missing ranges, varies packs/palettes/effects, saves per-clip progress and forces Word box. Existing word timing may be reused from the recovery snapshot. Manual effects applies a recipe to the current clip via Render changes. No provider upload occurs.
+
+## AI director lab
+
+A saved `settings.plan` switches off heuristic beat decoration. Explicit clip-relative tool events control footage motion, local sounds, original reaction cards/emoji, callouts, spotlight and VJ background. Dialogue and Word box remain independent. PlanEditor exposes timing, duration, tool, asset, amount and enable/remove. The Engine rejects invalid edited plans. `pop/rimshot/record_stop` are original synthesized sounds; reaction cards use original text/vector layouts and system emoji, not fetched meme footage. The existing TV7 cloud gateway makes real structured LLM calls using timed speech; no visual analysis or AI video generation is claimed.
+
+Full-frame cutaways: `cutaways.ts` builds source and inserted-media sequences with frame-exact source offsets. OffthreadVideo/audio/Word box clocks resume together after inserted media; external footage fully replaces the frame and source speech stops for its duration. Plan `at` remains source-relative. `MemeLibrary` imports short movies, GIFs and images with name/tags/license/source credit; `PlanEditor` exposes asset, source offset, duration and insert audio %. The director sees available local IDs. GIPHY standard API disallows caching media; no GIPHY export connection is implied. Sample library footage: Big Buck Bunny, ©2008 Blender Foundation / bigbuckbunny.org, CC BY3.0, https://peach.blender.org/about/; excerpt trimmed and encoded from the official Blender download.
+
+Scroll-stopping 0s hook & unified batch pipeline (2026-11-03): `RemixPlan` supports at most one `hook` event at `at: 0.0..0.3s` (`duration: 0.6..1.8s`, `value: banner | freeze_banner | flash`, `amount: 40..100`, required `text <= 60` chars) with instant frame-0 envelope visibility (`editEnvelope(hook, 0) === 1`) while mid-clip events keep `at >= 1.0s` and `>= 2.0s` breathing room. Library `Shuffle all` runs AI clip selection (`/v1/ai/transcript-intelligence` with local fallback) and the AI Remix Director (`/v1/ai/remix-plan`) across all videos in the active profile.

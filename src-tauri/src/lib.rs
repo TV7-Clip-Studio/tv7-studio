@@ -20,6 +20,48 @@ fn managed_engine_connection(engine: State<'_, ManagedEngine>) -> Result<EngineC
     engine.connection.clone()
 }
 
+fn validated_social_login_url(value: &str) -> Result<tauri::Url, String> {
+    let invalid = || "Unsupported social authorization URL".to_string();
+    if value.len() > 8192 {
+        return Err(invalid());
+    }
+    let url = tauri::Url::parse(value).map_err(|_| invalid())?;
+    if url.scheme() != "https"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.port().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(invalid());
+    }
+    let supported = match url.host_str() {
+        Some("accounts.google.com") => {
+            matches!(url.path(), "/o/oauth2/v2/auth" | "/o/oauth2/auth")
+        }
+        Some("www.instagram.com") => {
+            matches!(url.path(), "/oauth/authorize" | "/oauth/authorize/")
+        }
+        Some("www.tiktok.com") => {
+            matches!(url.path(), "/v2/auth/authorize" | "/v2/auth/authorize/")
+        }
+        _ => false,
+    };
+    if !supported {
+        return Err(invalid());
+    }
+    Ok(url)
+}
+
+#[tauri::command]
+fn open_social_login(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let url = validated_social_login_url(&url)?;
+    // Authorization stays in the system browser; Studio's webview keeps its navigation guard.
+    #[allow(deprecated)]
+    app.shell()
+        .open(url.to_string(), None)
+        .map_err(|_| "Could not open social authorization in your browser".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -35,7 +77,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![managed_engine_connection])
+        .invoke_handler(tauri::generate_handler![managed_engine_connection, open_social_login])
         .setup(|app| {
             let started = (|| -> Result<(EngineConnection, CommandChild), String> {
                 let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
@@ -106,4 +148,34 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validated_social_login_url;
+
+    #[test]
+    fn social_login_only_opens_official_https_authorization_endpoints() {
+        for url in [
+            "https://accounts.google.com/o/oauth2/v2/auth?client_id=test&state=test",
+            "https://accounts.google.com/o/oauth2/auth?client_id=test",
+            "https://www.instagram.com/oauth/authorize/?client_id=test",
+            "https://www.tiktok.com/v2/auth/authorize/?client_key=test",
+        ] {
+            assert!(validated_social_login_url(url).is_ok(), "{url}");
+        }
+        for url in [
+            "http://accounts.google.com/o/oauth2/v2/auth",
+            "https://accounts.google.com.evil.example/o/oauth2/v2/auth",
+            "https://user:password@accounts.google.com/o/oauth2/v2/auth",
+            "https://accounts.google.com:8443/o/oauth2/v2/auth",
+            "https://accounts.google.com/logout",
+            "https://www.instagram.com/direct/inbox/",
+            "https://www.tiktok.com/v2/auth/authorize/#fragment",
+            "file:///tmp/login.html",
+            "https://127.0.0.1/oauth/authorize",
+        ] {
+            assert!(validated_social_login_url(url).is_err(), "{url}");
+        }
+    }
 }

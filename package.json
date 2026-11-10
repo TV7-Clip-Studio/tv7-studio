@@ -13,9 +13,16 @@
     "desktop:build": "sh scripts/prepare-engine-sidecar.sh && tauri build"
   },
   "dependencies": {
+    "@remotion/bundler": "4.0.535",
+    "@remotion/media-utils": "4.0.535",
+    "@remotion/player": "4.0.535",
+    "@remotion/renderer": "4.0.535",
     "@tauri-apps/api": "^2.12.1",
+    "pixi-filters": "6.1.5",
+    "pixi.js": "8.22.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "remotion": "4.0.535"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.1",

@@ -1,0 +1,13 @@
+import {Audio,Sequence,staticFile} from 'remotion';
+import type {RemixPlan} from './plan';
+import {activeEdits,editEnvelope} from './plan';
+const stickers:Record<string,string>={food:'🍖',football:'⚽',magic:'✨',car:'🚗',ghost:'👻',money:'💸'};
+const reactions:Record<string,{emoji:string;text:string}>={double_take:{emoji:'👀',text:'¿CÓMO?'},awkward:{emoji:'😐',text:'SILENCIO INCÓMODO'},sus:{emoji:'🤨',text:'SOSPECHOSO'},stonks:{emoji:'📈',text:'NEGOCIÓN'}};
+export default function PlanOverlays({plan,time,accent,offset=0}:{plan:RemixPlan;time:number;accent:string;offset?:number}){
+ return <>{plan.events.filter(e=>e.enabled&&e.amount>0&&e.tool==='sound').map(e=><Sequence key={e.id} from={Math.round(e.at*30)-offset} durationInFrames={Math.max(1,Math.round(e.duration*30))} layout="none"><Audio src={staticFile(`remix-sfx/${e.value}.wav`)} volume={e.amount/100*.18}/></Sequence>)}
+ {activeEdits(plan,time).map(e=>{const opacity=editEnvelope(e,time);const reaction=reactions[e.value];
+ if(e.tool==='hook')return <div key={e.id} style={{position:'absolute',top:180,left:60,right:60,display:'flex',flexDirection:'column',alignItems:'center',gap:12,opacity,transform:`scale(${1+.04*opacity}) rotate(-1.5deg)`,pointerEvents:'none'}}>{e.value==='flash'&&time-e.at<0.12&&<div style={{position:'fixed',inset:0,background:accent,opacity:.28}}/>}<span style={{background:'#111',color:accent,padding:'8px 22px',borderRadius:999,fontSize:28,fontWeight:900,letterSpacing:3,border:`3px solid ${accent}`}}>⚡ MIRÁ ESTO</span><span style={{background:accent,color:'#111',padding:'20px 32px',borderRadius:20,fontSize:48,fontWeight:900,lineHeight:1.15,textAlign:'center',boxShadow:'10px 10px 0 #111',border:'5px solid #111',textTransform:'uppercase'}}>{e.text}</span></div>;
+ if(e.tool==='spotlight')return <div key={e.id} style={{position:'absolute',top:460,left:40,width:1000,height:563,boxShadow:`inset 0 0 150px 70px rgba(0,0,0,${e.amount/150})`,opacity}}/>;
+ if(!['sticker','callout','meme'].includes(e.tool))return null;
+ return <div key={e.id} style={{position:'absolute',top:e.tool==='sticker'?300:1060,left:80,right:80,display:'flex',justifyContent:'center',alignItems:'center',gap:20,opacity,transform:`scale(${.94+.06*opacity})`,fontSize:e.tool==='sticker'?90+e.amount:32+e.amount*.2,fontWeight:900,textAlign:'center',color:'#111',pointerEvents:'none'}}>{e.tool==='sticker'?stickers[e.value]:<span style={{background:accent,padding:'16px 28px',borderRadius:16,boxShadow:'8px 8px 0 #0008',border:'4px solid #111'}}>{e.tool==='meme'?`${reaction?.emoji??''} ${e.text||reaction?.text||''}`:e.text}</span>}</div>;})}</>;
+}
