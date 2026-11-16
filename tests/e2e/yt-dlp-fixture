@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+case " $* " in
+  *" --version "*) printf '%s\n' '2026.08.19' ;;
+  *" --dump-single-json "*) printf '%s\n' '{"entries":[{"id":"fixture0001","title":"Channel fixture","duration":20}]}' ;;
+  *" --dump-json "*) printf '%s\n' '{"id":"fixture0001","title":"Channel fixture","duration":20}' ;;
+  *" after_move:filepath "*)
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        -o|--output) break ;;
+      esac
+      shift
+    done
+    if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+      printf '%s\n' 'Fixture downloader requires an output template' >&2
+      exit 2
+    fi
+    output=$(printf '%s\n' "$2" | sed 's/%(ext)s/mp4/g')
+    cp "$TV7_E2E_DIR/local-fixture.mp4" "$output"
+    printf '%s\n' "$output"
+    ;;
+  *) exit 1 ;;
+esac

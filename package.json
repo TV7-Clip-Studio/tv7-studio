@@ -1,7 +1,7 @@
 {
   "name": "tv7-studio",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,21 +10,23 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "desktop:dev": "sh scripts/prepare-engine-sidecar.sh && tauri dev",
-    "desktop:build": "sh scripts/prepare-engine-sidecar.sh && tauri build"
+    "desktop:build": "sh scripts/prepare-engine-sidecar.sh && tauri build",
+    "test:e2e": "sh scripts/test-e2e.sh"
   },
   "dependencies": {
-    "@remotion/bundler": "4.0.535",
-    "@remotion/media-utils": "4.0.535",
-    "@remotion/player": "4.0.535",
-    "@remotion/renderer": "4.0.535",
+    "@remotion/bundler": "4.0.543",
+    "@remotion/media-utils": "4.0.543",
+    "@remotion/player": "4.0.543",
+    "@remotion/renderer": "4.0.543",
     "@tauri-apps/api": "^2.12.1",
     "pixi-filters": "6.1.5",
     "pixi.js": "8.22.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "remotion": "4.0.535"
+    "remotion": "4.0.543"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tauri-apps/cli": "^2.12.1",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",

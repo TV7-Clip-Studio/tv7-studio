@@ -33,3 +33,6 @@ src-tauri/binaries/_internal
 *.njsproj
 *.sln
 *.sw?
+
+/test-results/
+/playwright-report/

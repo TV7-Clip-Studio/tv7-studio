@@ -40,3 +40,22 @@ Studio automatically acquires source captions or transcribes locally, proposes e
 ## License
 
 TV7 source in this repository is available under the [MIT License](LICENSE). External dependencies and tools retain their respective licenses. See the [TV7 project overview](https://github.com/TV7-Clip-Studio/tv7-core/blob/main/PROJECT.md) for the repository map and current scope.
+
+### Browser journey tests
+
+Run `cargo build --locked -p engine-service` in a sibling `tv7-engine` checkout,
+then run `npm ci`, `npx playwright install chromium`, and `npm run test:e2e` here.
+FFmpeg and ffprobe must be on PATH. The suite starts its own Studio and Engine,
+uses a temporary media catalog and a fixture downloader, and needs no account
+or provider credentials. Keep port 5173 free. Set `TV7_E2E_ENGINE_PORT` to use a port other than 17070 for Engine.
+
+
+### Optional local remix renderer
+
+A browser or desktop development checkout can use the sibling Studio remix
+worker. To use that renderer with a packaged Engine on a different machine,
+provide Node.js and a Studio checkout with `npm ci` completed, then set
+`TV7_ENGINE_REMIX_WORKER` to the absolute path of `scripts/render-remix.mjs`
+in the Engine process environment before launching Studio. The macOS app
+bundle currently includes Engine and yt-dlp. The Node remix worker and its
+dependencies are installed separately.
