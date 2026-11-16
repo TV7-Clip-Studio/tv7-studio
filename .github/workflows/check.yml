@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: TV7-Clip-Studio/tv7-engine
-          ref: e03df7ca33cb3ab0712e6b96c427427f4a734733
+          ref: ca4d0e45a135533113f30c93b647736989b50f5b
           path: tv7-engine
       - uses: actions/setup-node@v4
         with:
