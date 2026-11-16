@@ -47,4 +47,4 @@ Run `cargo build --locked -p engine-service` in a sibling `tv7-engine` checkout,
 then run `npm ci`, `npx playwright install chromium`, and `npm run test:e2e` here.
 FFmpeg and ffprobe must be on PATH. The suite starts its own Studio and Engine,
 uses a temporary media catalog and a fixture downloader, and needs no account
-or provider credentials. Keep ports 5173 and 17070 free while it runs.
+or provider credentials. Keep port 5173 free. Set `TV7_E2E_ENGINE_PORT` to use a port other than 17070 for Engine.

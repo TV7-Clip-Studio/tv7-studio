@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: TV7-Clip-Studio/tv7-engine
-          ref: 60dd8b03422f37104ad6f0996de79436a90595d7
+          ref: e03df7ca33cb3ab0712e6b96c427427f4a734733
           path: tv7-engine
       - uses: actions/setup-node@v4
         with:
@@ -24,7 +24,7 @@ jobs:
         working-directory: tv7-engine
       - run: npm ci && make check
         working-directory: tv7-studio
-      - run: npx playwright install --with-deps chromium && npm run test:e2e
+      - run: npx --no-install playwright install --with-deps chromium && npm run test:e2e
         working-directory: tv7-studio
       - uses: actions/upload-artifact@v4
         if: failure()

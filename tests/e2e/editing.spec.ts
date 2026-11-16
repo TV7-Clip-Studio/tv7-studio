@@ -13,8 +13,8 @@ async function renderClip(page: Page) {
   await tools.locator("summary").click();
   await page.getByLabel("Import a WebVTT transcript instead").setInputFiles(transcript);
   await expect(page.getByText("Transcript ready:", { exact: false })).toBeVisible();
-  const editor = page.getByText("Edit clip · timing, subtitles and framing", { exact: true });
-  if (await editor.count() && !(await page.getByLabel("Burn subtitles").isVisible())) {
+  const editor = page.locator("details.clip-advanced:not([open]) > summary");
+  if (await editor.count()) {
     await editor.click();
   }
   await page.getByLabel("Burn subtitles").uncheck();
