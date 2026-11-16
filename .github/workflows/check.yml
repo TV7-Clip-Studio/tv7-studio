@@ -22,7 +22,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg libssl-dev pkg-config
       - run: cargo build --locked -p engine-service
         working-directory: tv7-engine
-      - run: npm ci && make check
+      - run: npm ci && npm audit --audit-level=low && make check
         working-directory: tv7-studio
       - run: npx --no-install playwright install --with-deps chromium && npm run test:e2e
         working-directory: tv7-studio
