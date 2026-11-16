@@ -38,7 +38,8 @@ test("import, edit, preview, and reopen a saved clip", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Clip editor" })).toBeVisible();
   await renderClip(page);
   await page.getByRole("button", { name: "Library", exact: true }).click();
-  await expect(page.getByRole("button", { name: /^local-fixture\.mp4 .*1 clip/ })).toBeVisible();
+  // The Library shows the ready status after the debounced catalog save.
+  await expect(page.getByRole("img", { name: "Clip ready", exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Library", exact: true }).click();
   const project = page.getByRole("button", { name: /^local-fixture\.mp4 .*1 clip/ });
