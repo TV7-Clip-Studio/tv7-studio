@@ -40,3 +40,11 @@ Studio automatically acquires source captions or transcribes locally, proposes e
 ## License
 
 TV7 source in this repository is available under the [MIT License](LICENSE). External dependencies and tools retain their respective licenses. See the [TV7 project overview](https://github.com/TV7-Clip-Studio/tv7-core/blob/main/PROJECT.md) for the repository map and current scope.
+
+### Browser journey tests
+
+Run `cargo build --locked -p engine-service` in a sibling `tv7-engine` checkout,
+then run `npm ci`, `npx playwright install chromium`, and `npm run test:e2e` here.
+FFmpeg and ffprobe must be on PATH. The suite starts its own Studio and Engine,
+uses a temporary media catalog and a fixture downloader, and needs no account
+or provider credentials. Keep ports 5173 and 17070 free while it runs.
